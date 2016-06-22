@@ -43,6 +43,12 @@
 #include "notify_body.h"
 #include "pidf.h"
 
+struct xml_info {
+	xmlDocPtr xml;
+	xmlNodePtr node;
+	int	priority;
+};
+
 str* agregate_xmls(str* pres_user, str* pres_domain, str** body_array, int n, int partial);
 str* build_dialoginfo(str* pres_user, str* pres_domain);
 extern int force_single_dialog;
@@ -108,6 +114,11 @@ str* dlginfo_agg_nbody(str* pres_user, str* pres_domain, str** body_array, int n
 	return n_body;
 }
 
+static int cmpnode(const void *p1, const void *p2)
+{
+	return ((struct xml_info *) p2)->priority - ((struct xml_info *) p1)->priority;
+}
+
 str* agregate_xmls(str* pres_user, str* pres_domain, str** body_array, int n, int partial)
 {
 	int i, j= 0;
@@ -117,24 +128,22 @@ str* agregate_xmls(str* pres_user, str* pres_domain, str** body_array, int n, in
 	xmlNsPtr   namespace = NULL;
 
 	xmlNodePtr p_root= NULL;
-	xmlDocPtr* xml_array ;
+	struct xml_info *xml_array ;
 	xmlNodePtr node = NULL;
 	char *state;
-	int winner_priority = -1, priority ;
-	xmlNodePtr winner_dialog_node = NULL ;
 	str *body= NULL;
 	char buf[MAX_URI_SIZE+1];
 
 	LM_DBG("[pres_user]=%.*s [pres_domain]= %.*s, [n]=%d\n",
 			pres_user->len, pres_user->s, pres_domain->len, pres_domain->s, n);
 
-	xml_array = (xmlDocPtr*)pkg_malloc( n*sizeof(xmlDocPtr));
+	xml_array = (struct xml_info*)pkg_malloc( n*sizeof(struct xml_info));
 	if(xml_array== NULL)
 	{
 		LM_ERR("while allocating memory");
 		return NULL;
 	}
-	memset(xml_array, 0, n*sizeof(xmlDocPtr)) ;
+	memset(xml_array, 0, n*sizeof(struct xml_info)) ;
 
 	/* parse all the XML documents */
 	for(i=0; i<n; i++)
@@ -142,12 +151,12 @@ str* agregate_xmls(str* pres_user, str* pres_domain, str** body_array, int n, in
 		if(body_array[i] == NULL )
 			continue;
 
-		xml_array[j] = NULL;
-		xml_array[j] = xmlParseMemory( body_array[i]->s, body_array[i]->len );
+		xml_array[j].xml = NULL;
+		xml_array[j].xml = xmlParseMemory( body_array[i]->s, body_array[i]->len );
 
 		/* LM_DBG("parsing XML body: [n]=%d, [i]=%d, [j]=%d xml_array[j]=%p\n", n, i, j, xml_array[j] ); */
 
-		if( xml_array[j]== NULL)
+		if( xml_array[j].xml == NULL)
 		{
 			LM_ERR("while parsing xml body message\n");
 			goto error;
@@ -207,7 +216,7 @@ str* agregate_xmls(str* pres_user, str* pres_domain, str** body_array, int n, in
 	for(i=0; i<j; i++)
 	{
 		/* LM_DBG("[n]=%d, [i]=%d, [j]=%d xml_array[i]=%p\n", n, i, j, xml_array[j] ); */
-		p_root= xmlDocGetRootElement(xml_array[i]);
+		p_root= xmlDocGetRootElement(xml_array[i].xml);
 			if(p_root ==NULL) {
 				LM_ERR("while geting the xml_tree root element\n");
 				goto error;
@@ -216,31 +225,21 @@ str* agregate_xmls(str* pres_user, str* pres_domain, str** body_array, int n, in
 			for (node = p_root->children; node; node = node->next) {
 				if (node->type == XML_ELEMENT_NODE) {
 					LM_DBG("node type: Element, name: %s\n", node->name);
-					/* we do not copy the node, but unlink it and then add it ot the new node
-					 * this destroys the original document but we do not need it anyway.
-					 * using "copy" instead of "unlink" would also copy the namespace which
-					 * would then be declared redundant (libxml unfortunately can not remove
-					 * namespaces)
+					/* try to put only the most important into the XML document
+					 * order of importance: terminated->trying->proceeding->confirmed->early
 					 */
-					if (!force_single_dialog || (j==1)) {
+					if(j == 1) {
 						xmlUnlinkNode(node);
 						if(xmlAddChild(root_node, node)== NULL) {
 							LM_ERR("while adding child\n");
 							goto error;
 						}
 					} else {
-						/* try to put only the most important into the XML document
-						 * order of importance: terminated->trying->proceeding->confirmed->early
-						 */
+						xml_array[i].node = node;
 						state = xmlNodeGetNodeContentByName(node, "state", NULL);
 						if (state) {
 							LM_DBG("state element content = %s\n", state);
-							priority = get_dialog_state_priority(state);
-							if (priority > winner_priority) {
-								winner_priority = priority;
-								LM_DBG("new winner priority = %s (%d)\n", state, winner_priority);
-								winner_dialog_node = node;
-							}
+							xml_array[i].priority = get_dialog_state_priority(state);
 							xmlFree(state);
 						}
 					}
@@ -249,11 +248,18 @@ str* agregate_xmls(str* pres_user, str* pres_domain, str** body_array, int n, in
 		}
 	}
 
-	if (force_single_dialog && (j!=1)) {
-		xmlUnlinkNode(winner_dialog_node);
-		if(xmlAddChild(root_node, winner_dialog_node)== NULL) {
-			LM_ERR("while adding winner-child\n");
-			goto error;
+	if(j!=1) {
+		qsort(xml_array, j, sizeof(struct xml_info), cmpnode);
+		for(i=0; i<j; i++)
+		{
+			xmlUnlinkNode(xml_array[i].node);
+			if(xmlAddChild(root_node, xml_array[i].node)== NULL) {
+				LM_ERR("while adding child\n");
+				goto error;
+			}
+			xml_array[i].node = NULL;
+			if (force_single_dialog)
+				break; 
 		}
 	}
 
@@ -267,8 +273,10 @@ str* agregate_xmls(str* pres_user, str* pres_domain, str** body_array, int n, in
 
   	for(i=0; i<j; i++)
 	{
-		if(xml_array[i]!=NULL)
-			xmlFreeDoc( xml_array[i]);
+		if(xml_array[i].xml!=NULL) {
+			xmlFreeDoc( xml_array[i].xml);
+			xml_array[i].xml = NULL;
+		}
 	}
 	if (doc)
 		xmlFreeDoc(doc);
@@ -276,7 +284,7 @@ str* agregate_xmls(str* pres_user, str* pres_domain, str** body_array, int n, in
 		pkg_free(xml_array);
 
 	xmlCleanupParser();
-    xmlMemoryDump();
+	xmlMemoryDump();
 
 	return body;
 
@@ -285,8 +293,8 @@ error:
 	{
 		for(i=0; i<=j; i++)
 		{
-			if(xml_array[i]!=NULL)
-				xmlFreeDoc( xml_array[i]);
+			if(xml_array[i].xml!=NULL)
+				xmlFreeDoc( xml_array[i].xml);
 		}
 		pkg_free(xml_array);
 	}
@@ -312,11 +320,64 @@ int get_dialog_state_priority(char *state) {
 	return 0;
 }
 
+str *dlginfo_force_single_dialog(str *src_body) {
+	str *body= NULL;
+	xmlDocPtr xml = NULL;
+	int nc = 0;
+
+	xmlNodePtr p_root= NULL;
+	xmlNodePtr node = NULL, nnode = NULL;
+	
+	xml = xmlParseMemory( src_body->s, src_body->len );
+
+	if(xml == NULL) {
+		LM_ERR("while parsing xml body message\n");
+		return NULL;
+	}
+
+	p_root = xmlDocGetRootElement(xml);
+
+	if(p_root == NULL) {
+		LM_ERR("while geting the xml_tree root element\n");
+		return NULL;
+	}
+
+	if (p_root->children) {
+		for (node = p_root->children; node; node=nnode) {
+			if (node->type == XML_ELEMENT_NODE) {
+				nc++;
+				nnode = node->next;
+				if(nc>2) {
+					xmlUnlinkNode(node);
+					xmlFreeNode(node);
+				}
+			}
+		}
+	}
+
+	if(nc<3) {
+		/* Only one, stop processing... */
+		xmlFreeDoc(xml);
+		return NULL;
+	}
+	
+	body = (str*)pkg_malloc(sizeof(str));
+
+	xmlDocDumpMemory(xml,(xmlChar**)(void*)&body->s, 
+			&body->len);
+
+	xmlCleanupParser();
+	xmlMemoryDump();
+
+	return body;
+}
 
 str *dlginfo_body_setversion(subs_t *subs, str *body) {
 	char *version_start=0;
 	char version[MAX_INT_LEN + 2]; /* +2 becasue of trailing " and \0 */
 	int version_len;
+
+	LM_WARN("subs.user_flag = %u\n", subs->user_flag);
 
 	if (!body) {
 		return NULL;
@@ -348,7 +409,11 @@ str *dlginfo_body_setversion(subs_t *subs, str *body) {
 	memcpy(version_start, version, version_len);
 	memset(version_start + version_len, ' ', MAX_INT_LEN + 2 - version_len);
 
-	return NULL;
+	if(subs->user_flag) {
+		return dlginfo_force_single_dialog(body);
+	} else {
+		return NULL;
+	}
 }
 
 str* build_dialoginfo(str* pres_user, str* pres_domain)
