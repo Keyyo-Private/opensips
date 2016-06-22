@@ -57,7 +57,7 @@ void print_publ(publ_info_t* p)
 
 str* build_dialoginfo(char *state, struct to_body *entity, struct to_body *peer,
 		str *callid, unsigned int initiator, str *localtag, str *remotetag,
-		int local_rendering, int remote_rendering)
+		int local_rendering, int remote_rendering, str *setup_ts, str *connect_ts, str *release_ts)
 {
 	xmlDocPtr  doc = NULL;
 	xmlNodePtr root_node = NULL;
@@ -68,6 +68,7 @@ str* build_dialoginfo(char *state, struct to_body *entity, struct to_body *peer,
 	xmlNodePtr tag_node = NULL;
 	xmlNodePtr id_node = NULL;
 	xmlNodePtr rendering_node = NULL;
+	xmlNodePtr time_node = NULL;
 	str *body= NULL;
 	char buf[MAX_URI_SIZE+1];
 
@@ -149,6 +150,32 @@ str* build_dialoginfo(char *state, struct to_body *entity, struct to_body *peer,
 		xmlNewProp(dialog_node, BAD_CAST "direction", BAD_CAST "initiator");
 	}else {
 		xmlNewProp(dialog_node, BAD_CAST "direction", BAD_CAST "recipient");
+	}
+
+	time_node = xmlNewChild(dialog_node, NULL, BAD_CAST "time-info", NULL);
+	if( time_node ==NULL)
+	{
+		LM_ERR("while adding child\n");
+		goto error;
+	}
+
+    	xmlNewProp(time_node, BAD_CAST "xmlns",
+			BAD_CAST "urn:oid:1.3.6.1.4.1.8546:params:xml:ns:dialog-info");
+
+	sprintf(buf,"%d", (unsigned int) time(NULL));
+	xmlNewProp(time_node, BAD_CAST "event-ts", BAD_CAST buf);
+
+	if(setup_ts->len) {
+		sprintf(buf, "%.*s", setup_ts->len, setup_ts->s );
+		xmlNewProp(time_node, BAD_CAST "setup-ts", BAD_CAST buf);
+	}
+	if(connect_ts->len) {
+		sprintf(buf, "%.*s", connect_ts->len, connect_ts->s );
+		xmlNewProp(time_node, BAD_CAST "connect-ts", BAD_CAST buf);
+	}
+	if(release_ts->len) {
+		sprintf(buf, "%.*s", release_ts->len, release_ts->s );
+		xmlNewProp(time_node, BAD_CAST "release-ts", BAD_CAST buf);
 	}
 
 	/* state tag */
@@ -308,13 +335,13 @@ error:
 
 void dialog_publish(char *state, struct to_body* entity, struct to_body *peer, str *callid,
 	unsigned int initiator, unsigned int lifetime, str *localtag, str *remotetag,
-	int local_rendering, int remote_rendering)
+	int local_rendering, int remote_rendering, str *setup_ts, str *connect_ts, str *release_ts)
 {
 	str* body= NULL;
 	publ_info_t publ;
 	int ret_code;
 
-	body= build_dialoginfo(state, entity, peer, callid, initiator, localtag, remotetag, local_rendering, remote_rendering);
+	body= build_dialoginfo(state, entity, peer, callid, initiator, localtag, remotetag, local_rendering, remote_rendering, setup_ts, connect_ts, release_ts);
 	if(body == NULL || body->s == NULL)
 	{
 		LM_ERR("failed to construct dialoginfo body\n");
