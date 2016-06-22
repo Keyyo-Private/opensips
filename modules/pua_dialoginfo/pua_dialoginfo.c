@@ -97,6 +97,7 @@ static int nopublish_flag = -1;
 static str setup_dlg_var = {"dlg_setup_time", 14};
 static str connect_dlg_var = {"dlg_connect_time", 16};
 static str release_dlg_var = {"dlg_release_time", 16};
+static str replace_dlg_var = {"dlg_replace", 11};
 
 /** module functions */
 
@@ -290,6 +291,7 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 	str setup_ts = {0,0};
 	str connect_ts = {0,0};
 	str release_ts = {0,0};
+	str replace = {0,0};
 
 
 	flag_str.s = &flag;
@@ -319,6 +321,7 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 	dlg_api.fetch_dlg_value(dlg, &setup_dlg_var, &setup_ts, 1);
 	dlg_api.fetch_dlg_value(dlg, &connect_dlg_var, &connect_ts, 1);
 	dlg_api.fetch_dlg_value(dlg, &release_dlg_var, &release_ts, 1);
+	dlg_api.fetch_dlg_value(dlg, &replace_dlg_var, &replace, 1);
 
 	parse_to(peer_uri.s, peer_uri.s+peer_uri.len, &peer_to_body);
 	if(peer_to_body.error != PARSE_OK)
@@ -401,9 +404,9 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 	case DLGCB_EXPIRED:
 		LM_DBG("dialog over, from=%.*s\n", dlg->from_uri.len, dlg->from_uri.s);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
-			dialog_publish("terminated", &from, &peer_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts);
+			dialog_publish("terminated", &from, &peer_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
-			dialog_publish("terminated", &peer_to_body, &from, &(dlg->callid), 0, 0, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts);
+			dialog_publish("terminated", &peer_to_body, &from, &(dlg->callid), 0, 0, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
 		break;
 	case DLGCB_RESPONSE_WITHIN:
 		if (get_cseq(msg)->method_id==METHOD_INVITE) {
@@ -432,9 +435,9 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 
 		LM_DBG("dialog confirmed, from=%.*s\n", dlg->from_uri.len, dlg->from_uri.s);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
-			dialog_publish("confirmed", &from, &peer_to_body, &(dlg->callid), 1, dlg->lifetime, from_tag, to_tag, local_rendering, remote_rendering, &setup_ts, &connect_ts, &release_ts);
+			dialog_publish("confirmed", &from, &peer_to_body, &(dlg->callid), 1, dlg->lifetime, from_tag, to_tag, local_rendering, remote_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
-			dialog_publish("confirmed", &peer_to_body, &from, &(dlg->callid), 0, dlg->lifetime, to_tag, from_tag, remote_rendering, local_rendering, &setup_ts, &connect_ts, &release_ts);
+			dialog_publish("confirmed", &peer_to_body, &from, &(dlg->callid), 0, dlg->lifetime, to_tag, from_tag, remote_rendering, local_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
 		break;
 	case DLGCB_EARLY:
 		LM_DBG("dialog is early, from=%.*s\n", from.uri.len, from.uri.s);
@@ -442,25 +445,25 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 		{
 			if (caller_confirmed) {
 				dialog_publish("confirmed", &from, &peer_to_body, &(dlg->callid), 1,
-					dlg->lifetime, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts);
+					dlg->lifetime, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
 			} else {
 				dialog_publish("early", &from, &peer_to_body, &(dlg->callid), 1,
-					dlg->lifetime, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts);
+					dlg->lifetime, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
 			}
 		}
 
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
 		{
 			dialog_publish("early", &peer_to_body, &from, &(dlg->callid), 0,
-				dlg->lifetime, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts);
+				dlg->lifetime, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
 		}
 		break;
 	default:
 		LM_ERR("unhandled dialog callback type %d received, from=%.*s\n", type, dlg->from_uri.len, dlg->from_uri.s);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
-			dialog_publish("terminated", &from, &peer_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, local_rendering, remote_rendering, &setup_ts, &connect_ts, &release_ts);
+			dialog_publish("terminated", &from, &peer_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, local_rendering, remote_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
-			dialog_publish("terminated", &peer_to_body, &from, &(dlg->callid), 0, 0, to_tag, from_tag, remote_rendering, local_rendering, &setup_ts, &connect_ts, &release_ts);
+			dialog_publish("terminated", &peer_to_body, &from, &(dlg->callid), 0, 0, to_tag, from_tag, remote_rendering, local_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
 	}
 error:
 	if(peer_uri.s)
@@ -684,6 +687,7 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 	str setup_ts = {0,0};
 	str connect_ts = {0,0};
 	str release_ts = {0,0};
+	str replace = {0,0};
 
 	peer_to_body.param_lst = FROM.param_lst = NULL;
 
@@ -697,6 +701,8 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 	}
 
 	dlg = dlg_api.get_dlg();
+
+	dlg_api.fetch_dlg_value(dlg, &replace_dlg_var, &replace, 1);
 
 	LM_DBG("new INVITE dialog created: from=%.*s\n",
 		dlg->from_uri.len, dlg->from_uri.s);
@@ -884,10 +890,10 @@ default_callee:
 
         if(publish_on_trying) {
 	        if(flag == DLG_PUB_A || flag == DLG_PUB_AB)
-		        dialog_publish("trying", from, &peer_to_body, &(dlg->callid), 1, DEFAULT_CREATED_LIFETIME, from_tag, 0, is_rendering(msg), -1, &setup_ts, &connect_ts, &release_ts);
+		        dialog_publish("trying", from, &peer_to_body, &(dlg->callid), 1, DEFAULT_CREATED_LIFETIME, from_tag, 0, is_rendering(msg), -1, &setup_ts, &connect_ts, &release_ts, &replace);
 
 	        if(flag == DLG_PUB_B || flag == DLG_PUB_AB)
-		        dialog_publish("trying", &peer_to_body, from, &(dlg->callid), 0, DEFAULT_CREATED_LIFETIME, 0, from_tag, -1, is_rendering(msg), &setup_ts, &connect_ts, &release_ts);
+		        dialog_publish("trying", &peer_to_body, from, &(dlg->callid), 0, DEFAULT_CREATED_LIFETIME, 0, from_tag, -1, is_rendering(msg), &setup_ts, &connect_ts, &release_ts, &replace);
         }
 
 	ret=1;

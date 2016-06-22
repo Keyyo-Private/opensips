@@ -30,6 +30,7 @@
 
 #include "../../parser/parse_expires.h"
 #include "../../parser/msg_parser.h"
+#include "../../parser/parse_replaces.h"
 #include "../../str.h"
 #include "../../name_alias.h"
 #include "../../socket_info.h"
@@ -38,6 +39,7 @@
 #include "../tm/tm_load.h"
 #include "../pua/pua.h"
 #include "pua_dialoginfo.h"
+#include "../../strcommon.h"
 
 #define PRES_ID_LEN  64
 
@@ -57,7 +59,7 @@ void print_publ(publ_info_t* p)
 
 str* build_dialoginfo(char *state, struct to_body *entity, struct to_body *peer,
 		str *callid, unsigned int initiator, str *localtag, str *remotetag,
-		int local_rendering, int remote_rendering, str *setup_ts, str *connect_ts, str *release_ts)
+		int local_rendering, int remote_rendering, str *setup_ts, str *connect_ts, str *release_ts, str *replace)
 {
 	xmlDocPtr  doc = NULL;
 	xmlNodePtr root_node = NULL;
@@ -69,6 +71,7 @@ str* build_dialoginfo(char *state, struct to_body *entity, struct to_body *peer,
 	xmlNodePtr id_node = NULL;
 	xmlNodePtr rendering_node = NULL;
 	xmlNodePtr time_node = NULL;
+	xmlNodePtr replace_node = NULL;
 	str *body= NULL;
 	char buf[MAX_URI_SIZE+1];
 
@@ -302,6 +305,45 @@ str* build_dialoginfo(char *state, struct to_body *entity, struct to_body *peer,
 		}
 	}
 
+	if(replace->len)
+	{
+#define U_REPLACES_BUF_LEN 512
+		char u_replaces_buf[U_REPLACES_BUF_LEN];
+		str u_replaces;
+		struct replaces_body replaces_b;
+
+		u_replaces.s = &u_replaces_buf[0];
+		u_replaces.len = U_REPLACES_BUF_LEN;
+		if(unescape_param(replace,&u_replaces)==0)
+		{
+			if( parse_replaces_body(u_replaces.s, u_replaces.len,
+				&replaces_b)>=0 &&
+				replaces_b.callid_val.s &&
+				replaces_b.to_tag_val.s &&
+				replaces_b.from_tag_val.s)
+			{
+			
+				replace_node = xmlNewChild(dialog_node, NULL, BAD_CAST "replaces", NULL) ;
+				if( replace_node ==NULL)
+				{
+					LM_ERR("while adding child\n");
+					goto error;
+				}
+				memcpy(buf, replaces_b.callid_val.s, replaces_b.callid_val.len);
+				buf[replaces_b.callid_val.len]= '\0';
+				xmlNewProp(replace_node, BAD_CAST "call-id", BAD_CAST buf);
+
+				memcpy(buf, replaces_b.to_tag_val.s, replaces_b.to_tag_val.len);
+				buf[replaces_b.to_tag_val.len]= '\0';
+				xmlNewProp(replace_node, BAD_CAST "local-tag", BAD_CAST buf);
+
+				memcpy(buf, replaces_b.from_tag_val.s, replaces_b.from_tag_val.len);
+				buf[replaces_b.from_tag_val.len]= '\0';
+				xmlNewProp(replace_node, BAD_CAST "remote-tag", BAD_CAST buf);
+			}
+		}
+	}
+
 	/* create the body */
 	body = (str*)pkg_malloc(sizeof(str));
 	if(body == NULL)
@@ -335,13 +377,14 @@ error:
 
 void dialog_publish(char *state, struct to_body* entity, struct to_body *peer, str *callid,
 	unsigned int initiator, unsigned int lifetime, str *localtag, str *remotetag,
-	int local_rendering, int remote_rendering, str *setup_ts, str *connect_ts, str *release_ts)
+	int local_rendering, int remote_rendering, str *setup_ts, str *connect_ts, str *release_ts,
+	str *replace)
 {
 	str* body= NULL;
 	publ_info_t publ;
 	int ret_code;
 
-	body= build_dialoginfo(state, entity, peer, callid, initiator, localtag, remotetag, local_rendering, remote_rendering, setup_ts, connect_ts, release_ts);
+	body= build_dialoginfo(state, entity, peer, callid, initiator, localtag, remotetag, local_rendering, remote_rendering, setup_ts, connect_ts, release_ts, replace);
 	if(body == NULL || body->s == NULL)
 	{
 		LM_ERR("failed to construct dialoginfo body\n");

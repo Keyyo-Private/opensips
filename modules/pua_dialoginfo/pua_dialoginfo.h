@@ -31,7 +31,7 @@ send_publish_t pua_send_publish;
 
 void dialog_publish(char *state, struct to_body* entity, struct to_body *peer, str *callid,
 	unsigned int initiator, unsigned int lifetime, str *localtag, str *remotetag,
-	int local_rendering, int remote_rendering, str *setup_ts, str *connect_ts, str *release_ts);
+	int local_rendering, int remote_rendering, str *setup_ts, str *connect_ts, str *release_ts, str *replace);
 
 extern str presence_server;
 
