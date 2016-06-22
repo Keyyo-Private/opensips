@@ -293,6 +293,12 @@ int update_subs_db(subs_t* subs, int type)
 	update_vals[n_update_cols].val.str_val = subs->reason;
 	n_update_cols++;
 
+	update_keys[n_update_cols] = &str_userflag_col;
+	update_vals[n_update_cols].type = DB_INT;
+	update_vals[n_update_cols].nul = 0;
+	update_vals[n_update_cols].val.int_val = subs->user_flag;
+	n_update_cols++;
+
 	if(pa_dbf.update( pa_db,query_cols, 0, query_vals,
 				update_keys, update_vals, n_query_cols,n_update_cols)<0)
 	{
@@ -498,7 +504,7 @@ void msg_watchers_clean(unsigned int ticks,void *param)
  *		- sends a reply in all cases (success or error).
  *	TODO replace -1 return code in error case with 0 ( exit from the script)
  * */
-int handle_subscribe(struct sip_msg* msg, char* force_active_param, char* str2)
+int handle_subscribe(struct sip_msg* msg, char* force_active_param, char* userflag)
 {
 	int  init_req = 0;
 	subs_t subs;
@@ -510,11 +516,29 @@ int handle_subscribe(struct sip_msg* msg, char* force_active_param, char* str2)
 	int reply_code;
 	str reply_str;
 	int ret;
+	unsigned int uf;
+	str s;
 
 	/* ??? rename to avoid collisions with other symbols */
 	counter++;
 
 	memset(&subs, 0, sizeof(subs_t));
+
+	if(userflag) {	
+		s.s = userflag;
+		s.len = strlen(s.s);
+		if (str2int(&s, &uf)!=0) {
+			LM_ERR("flag index must be a number <%s>\n", userflag);
+			return E_CFG;
+		}
+		if ( uf>=8*sizeof(unsigned int))  {
+			LM_ERR("flag index too high <%u> (max=%u)\n",
+				uf, (unsigned int)(8*sizeof(unsigned int)-1) );
+			return E_CFG;
+		}
+		subs.user_flag = (unsigned long)(1<<uf);
+		LM_WARN("sub flag set to %u", subs.user_flag);
+	}
 
 	reply_code= 400;
 	reply_str= pu_400_rpl;
@@ -1097,7 +1121,7 @@ int get_database_info(struct sip_msg* msg, subs_t* subs, int* reply_code, str* r
 	int n_query_cols = 0;
 	int n_result_cols = 0;
 	int remote_cseq_col= 0, local_cseq_col= 0, status_col, reason_col;
-	int record_route_col, version_col;
+	int record_route_col, version_col, userflag_col;
 	int pres_uri_col;
 	unsigned int remote_cseq;
 	str pres_uri, record_route;
@@ -1171,6 +1195,7 @@ int get_database_info(struct sip_msg* msg, subs_t* subs, int* reply_code, str* r
 	result_cols[reason_col=n_result_cols++] = &str_reason_col;
 	result_cols[record_route_col=n_result_cols++] = &str_record_route_col;
 	result_cols[version_col=n_result_cols++] = &str_version_col;
+	result_cols[userflag_col=n_result_cols++] = &str_userflag_col;
 
 	if (pa_dbf.use_table(pa_db, &active_watchers_table) < 0)
 	{
@@ -1232,6 +1257,7 @@ int get_database_info(struct sip_msg* msg, subs_t* subs, int* reply_code, str* r
 
 	subs->local_cseq= row_vals[local_cseq_col].val.int_val;
 	subs->version= row_vals[version_col].val.int_val;
+	subs->user_flag= row_vals[userflag_col].val.int_val;
 
 	if(subs->event->evp->parsed!= EVENT_DIALOG_SLA)
 	{
@@ -1325,9 +1351,10 @@ void update_db_subs(db_con_t *db,db_func_t dbf, shtable_t hash_table,
 	int pres_uri_col, to_user_col, to_domain_col, from_user_col, from_domain_col,
 		callid_col, totag_col, fromtag_col, event_col,status_col, event_id_col,
 		local_cseq_col, remote_cseq_col, expires_col, record_route_col,
-		contact_col, local_contact_col, version_col,socket_info_col,reason_col;
+		contact_col, local_contact_col, version_col,socket_info_col,reason_col,
+		userflag_col;
 	int u_expires_col, u_local_cseq_col, u_remote_cseq_col, u_version_col,
-		u_reason_col, u_status_col, u_contact_col;
+		u_reason_col, u_status_col, u_contact_col, u_userflag_col;
 	int i;
 	subs_t* s= NULL, *prev_s= NULL;
 	int n_query_cols= 0, n_update_cols= 0;
@@ -1435,6 +1462,11 @@ void update_db_subs(db_con_t *db,db_func_t dbf, shtable_t hash_table,
 	query_vals[version_col].nul = 0;
 	n_query_cols++;
 
+	query_cols[userflag_col= n_query_cols]= &str_userflag_col;
+	query_vals[userflag_col].type = DB_INT;
+	query_vals[userflag_col].nul = 0;
+	n_query_cols++;
+
 	/* cols and values used for update */
 	update_cols[u_expires_col= n_update_cols]= &str_expires_col;
 	update_vals[u_expires_col].type = DB_INT;
@@ -1469,6 +1501,11 @@ void update_db_subs(db_con_t *db,db_func_t dbf, shtable_t hash_table,
 	update_cols[u_version_col= n_update_cols]= &str_version_col;
 	update_vals[u_version_col].type = DB_INT;
 	update_vals[u_version_col].nul = 0;
+	n_update_cols++;
+
+	update_cols[u_userflag_col= n_update_cols]= &str_userflag_col;
+	update_vals[u_userflag_col].type = DB_INT;
+	update_vals[u_userflag_col].nul = 0;
 	n_update_cols++;
 
 	if (db==NULL){
@@ -1530,6 +1567,7 @@ void update_db_subs(db_con_t *db,db_func_t dbf, shtable_t hash_table,
 					update_vals[u_local_cseq_col].val.int_val= s->local_cseq;
 					update_vals[u_remote_cseq_col].val.int_val= s->remote_cseq;
 					update_vals[u_version_col].val.int_val= s->version;
+					update_vals[u_userflag_col].val.int_val= s->user_flag;
 					update_vals[u_status_col].val.int_val= s->status;
 					update_vals[u_reason_col].val.str_val= s->reason;
 					update_vals[u_contact_col].val.str_val= s->contact;
@@ -1568,6 +1606,8 @@ void update_db_subs(db_con_t *db,db_func_t dbf, shtable_t hash_table,
 					query_vals[version_col].val.int_val= s->version;
 					query_vals[status_col].val.int_val= s->status;
 					query_vals[reason_col].val.str_val= s->reason;
+					query_vals[userflag_col].val.int_val= s->user_flag;
+
 					if(s->sockinfo)
 						query_vals[socket_info_col].val.str_val= s->sockinfo->sock_str;
 					else
@@ -1745,6 +1785,13 @@ int insert_subs_db(subs_t* s)
 		query_vals[n_query_cols].val.str_val.len = 0;
 	}
 	n_query_cols++;
+
+	query_cols[n_query_cols]=&str_userflag_col;
+	query_vals[n_query_cols].type = DB_INT;
+	query_vals[n_query_cols].nul = 0;
+	query_vals[n_query_cols].val.int_val= s->user_flag;
+	n_query_cols++;
+
 	if(pa_dbf.use_table(pa_db, &active_watchers_table)< 0)
 	{
 		LM_ERR("in use table\n");
@@ -1772,7 +1819,7 @@ int restore_db_subs(void)
 	int pres_uri_col, expires_col, from_user_col, from_domain_col,to_user_col;
 	int callid_col,totag_col,fromtag_col,to_domain_col,sockinfo_col,reason_col;
 	int event_col,contact_col,record_route_col, event_id_col, status_col;
-	int remote_cseq_col, local_cseq_col, local_contact_col, version_col;
+	int remote_cseq_col, local_cseq_col, local_contact_col, version_col, userflag_col;
 	subs_t s;
 	str ev_sname, sockinfo_str;
 	pres_ev_t* event= NULL;
@@ -1804,6 +1851,7 @@ int restore_db_subs(void)
 	result_cols[version_col= n_result_cols++]	=&str_version_col;
 	result_cols[status_col= n_result_cols++]	=&str_status_col;
 	result_cols[reason_col= n_result_cols++]	=&str_reason_col;
+	result_cols[userflag_col= n_result_cols++]	=&str_userflag_col;
 
 	if(!pa_db)
 	{
@@ -1975,6 +2023,8 @@ int restore_db_subs(void)
 				s.sockinfo = grep_sock_info(&host, (unsigned short) port,
 						(unsigned short) proto);
 			}
+
+			s.user_flag = row_vals[userflag_col].val.int_val;
 
 			hash_code= core_hash(&s.pres_uri, &s.event->name, shtable_size);
 			if(insert_shtable(subs_htable, hash_code, &s)< 0)

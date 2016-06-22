@@ -92,6 +92,7 @@ extern str str_inserted_time_col;
 extern str str_received_time_col;
 extern str str_id_col;
 extern str str_sender_col;
+extern str str_userflag_col;
 
 void PRINT_DLG(FILE* out, dlg_t* _d);
 

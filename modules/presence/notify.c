@@ -83,6 +83,7 @@ str str_inserted_time_col = str_init("inserted_time");
 str str_received_time_col = str_init("received_time");
 str str_id_col = str_init("id");
 str str_sender_col = str_init("sender");
+str str_userflag_col = str_init("userflag");
 
 char* get_status_str(int status_flag)
 {
