@@ -336,6 +336,7 @@ static unsigned int myseqn = 0;
 static str nortpproxy_str = str_init("a=nortpproxy:yes");
 str rtpp_notify_socket = {0, 0};
 int rtpp_notify_socket_un = 0;
+char *rtpproxy_cid_prefix = "";
 
 /* used in rtpproxy_set_store() */
 static int rtpp_sets=0;
@@ -507,6 +508,7 @@ static param_export_t params[] = {
 	{"rtpproxy_disable_tout", INT_PARAM, &rtpproxy_disable_tout   },
 	{"rtpproxy_retr",         INT_PARAM, &rtpproxy_retr           },
 	{"rtpproxy_tout",         INT_PARAM, &rtpproxy_tout           },
+	{"rtpproxy_cid_prefix",   STR_PARAM, &rtpproxy_cid_prefix     },
 	{"rtpproxy_timeout",      STR_PARAM, &rtpproxy_timeout        },
 	{"rtpproxy_autobridge",   INT_PARAM, &rtpproxy_autobridge     },
 	{"db_url",                STR_PARAM, &db_url.s                },

@@ -63,7 +63,7 @@
 	(_x==_t[0]||_x==_t[7]||_x==_t[1]||_x==_t[2]||_x==_t[3]||_x==_t[4]\
 	||_x==_t[5]||_x==_t[6])
 
-
+extern char *rtpproxy_cid_prefix;
 
 int check_content_type(struct sip_msg *msg)
 {
@@ -237,6 +237,7 @@ ser_memmem(const void *b1, const void *b2, size_t len1, size_t len2)
 int
 get_callid(struct sip_msg* _m, str* _cid)
 {
+	static char gen_cid[512];
 
         if ((parse_headers(_m, HDR_CALLID_F, 0) == -1)) {
                 LM_ERR("failed to parse call-id header\n");
@@ -248,8 +249,16 @@ get_callid(struct sip_msg* _m, str* _cid)
                 return -1;
         }
 
-        _cid->s = _m->callid->body.s;
-        _cid->len = _m->callid->body.len;
+		if (_m->callid->body.len + strlen(rtpproxy_cid_prefix) >= 512) {
+			LM_ERR("get_callid(): Call-ID too big for buffer\n");
+			return -1;
+		}
+
+		memcpy(gen_cid, rtpproxy_cid_prefix, strlen(rtpproxy_cid_prefix));
+		memcpy(gen_cid +  strlen(rtpproxy_cid_prefix), _m->callid->body.s, _m->callid->body.len);
+
+		_cid->s = gen_cid;
+		_cid->len = strlen(rtpproxy_cid_prefix) +_m->callid->body.len;
         trim(_cid);
         return 0;
 }
