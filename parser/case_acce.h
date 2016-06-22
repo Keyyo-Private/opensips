@@ -81,6 +81,30 @@
 			goto other;        \
 	}
 
+#define ncod_CASE              \
+	switch(LOWER_DWORD(val)) { \
+		case _ncod_:           \
+			p += 4;            \
+			val = READ(p);     \
+			ing_CASE;         \
+			goto other;        \
+	}
+
+#define ing_CASE                                  \
+	if (LOWER_BYTE(*p) == 'i') {                 \
+		p++;                                     \
+		if (LOWER_BYTE(*p) == 'n') {             \
+			p++;                                      \
+			if (LOWER_BYTE(*p) == 'g') {              \
+				hdr->type = HDR_ACCEPTENCODING_T; \
+				hdr->name.len = 15;               \
+				p++;                              \
+				goto dc_cont;                     \
+			}                                         \
+		}                                                 \
+	}
+
+
 
 #define ptld_CASE              \
 	switch(LOWER_DWORD(val)) { \
@@ -93,6 +117,11 @@
 			p += 4;            \
 			val = READ(p);     \
 			ispo_CASE;         \
+			goto other;        \
+		case _pt_e_:           \
+			p += 4;            \
+			val = READ(p);     \
+			ncod_CASE;         \
 			goto other;        \
 	}
 

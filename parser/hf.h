@@ -92,6 +92,7 @@ enum _hdr_types_t {
 	HDR_WWW_AUTHENTICATE_T				/**< WWW-Authenticate header field */,
 	HDR_PROXY_AUTHENTICATE_T			/**< Proxy-Authenticate header field */,
 	HDR_MIN_EXPIRES_T				/**> Min-Expires header field */,
+	HDR_ACCEPTENCODING_T		     /**< Accept-Disposition hdr field */,
 	HDR_EOH_T					     /**< Some other header field */
 };
 
@@ -156,6 +157,7 @@ typedef unsigned long long hdr_flags_t;
 #define HDR_WWW_AUTHENTICATE_F			HDR_F_DEF(WWW_AUTHENTICATE)
 #define HDR_PROXY_AUTHENTICATE_F		HDR_F_DEF(PROXY_AUTHENTICATE)
 #define HDR_MIN_EXPIRES_F			HDR_F_DEF(MIN_EXPIRES)
+#define HDR_ACCEPTENCODING_F			HDR_F_DEF(ACCEPTENCODING)
 #define HDR_OTHER_F					HDR_F_DEF(OTHER)
 
 typedef enum _hdr_types_t hdr_types_t;
@@ -205,6 +207,7 @@ static inline int hdr_allocs_parse(struct hdr_field* hdr)
 		case HDR_PROXY_AUTHENTICATE_T:
 		case HDR_ALLOW_T:
 		case HDR_SUPPORTED_T:
+		case HDR_ACCEPTENCODING_T:
 			return 1;
 		default:
 			return 0;

@@ -52,6 +52,7 @@
 #include "parse_content.h"
 #include "parse_call_info.h"
 #include "parse_authenticate.h"
+#include "parse_accept_encoding.h"
 
 
 /*
@@ -218,6 +219,11 @@ void clean_hdr_field(struct hdr_field* hf)
 		case HDR_WWW_AUTHENTICATE_T:
 		case HDR_PROXY_AUTHENTICATE_T:
 			free_authenticate((struct authenticate_body *)hf->parsed);
+			hf->parsed = NULL;
+			break;
+
+		case HDR_ACCEPTENCODING_T:
+			free_accept_encoding((struct accept_encoding_body**)(void*)(&(hf->parsed)));
 			hf->parsed = NULL;
 			break;
 

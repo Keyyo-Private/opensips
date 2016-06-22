@@ -169,7 +169,9 @@
 #define _ter2_ 0x20726574   /* "ter " */
 #define _ter1_ 0x3a726574   /* "ter:" */
 
+#define _gzip_ 0x70697a67   /* "gzip" */
 
-
+#define _pt_e_ 0x652d7470   /* "pt-e" */
+#define _ncod_ 0x646f636e   /* "ncod" */
 
 #endif /* KEYS_H */
