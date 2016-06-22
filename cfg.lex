@@ -372,6 +372,7 @@ OPEN_FD_LIMIT		"open_files_limit"
 MCAST_LOOPBACK		"mcast_loopback"
 MCAST_TTL			"mcast_ttl"
 TOS					"tos"
+PMTU_DISCOVERY		"pmtu_discovery"
 DISABLE_DNS_FAILOVER  "disable_dns_failover"
 DISABLE_DNS_BLACKLIST "disable_dns_blacklist"
 DST_BLACKLIST		"dst_blacklist"
@@ -711,6 +712,8 @@ IMPORTFILE      "import_file"
 									return MCAST_TTL; }
 <INITIAL>{TOS}				{	count(); yylval.strval=yytext;
 									return TOS; }
+<INITIAL>{PMTU_DISCOVERY}				{	count(); yylval.strval=yytext;
+									return PMTU_DISCOVERY; }
 <INITIAL>{DISABLE_DNS_FAILOVER}	{	count(); yylval.strval=yytext;
 									return DISABLE_DNS_FAILOVER; }
 <INITIAL>{DISABLE_DNS_BLACKLIST}	{	count(); yylval.strval=yytext;

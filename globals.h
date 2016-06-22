@@ -120,6 +120,7 @@ extern int mcast_ttl;
 #endif /* USE_MCAST */
 
 extern int tos;
+extern int pmtu_discovery;
 
 extern int disable_dns_failover;
 extern int disable_dns_blacklist;

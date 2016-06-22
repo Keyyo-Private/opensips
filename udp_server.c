@@ -251,6 +251,17 @@ int udp_init(struct socket_info* sock_info)
 	}
 #endif
 
+#if defined (__linux__)
+	/* if pmtu_discovery=1 then set DF bit and do Path MTU discovery
+	 * disabled by default */
+	optval = (pmtu_discovery) ? IP_PMTUDISC_DO : IP_PMTUDISC_DONT;
+	if(setsockopt(sock_info->socket, IPPROTO_IP, IP_MTU_DISCOVER,
+                                        (void*)&optval, sizeof(optval)) ==-1){
+                LM_ERR("setsockopt: %s\n", strerror(errno));
+                goto error;
+        }
+#endif
+
 #ifdef USE_MCAST
 	if ((sock_info->flags & SI_IS_MCAST)
 	    && (setup_mcast_rcvr(sock_info->socket, addr)<0)){

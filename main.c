@@ -279,6 +279,7 @@ int mcast_ttl = -1; /* if -1, don't touch it, use the default (usually 1) */
 #endif /* USE_MCAST */
 
 int tos = IPTOS_LOWDELAY;
+int pmtu_discovery = 0;
 
 struct socket_info* udp_listen=0;
 #ifdef USE_TCP

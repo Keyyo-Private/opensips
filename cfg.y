@@ -423,6 +423,7 @@ extern char *finame;
 %token MCAST_LOOPBACK
 %token MCAST_TTL
 %token TOS
+%token PMTU_DISCOVERY
 %token DISABLE_DNS_FAILOVER
 %token DISABLE_DNS_BLACKLIST
 %token DST_BLACKLIST
@@ -1382,6 +1383,8 @@ assign_stm: DEBUG EQUAL snumber {
 							}
 		 }
 		| TOS EQUAL error { yyerror("number expected"); }
+		| PMTU_DISCOVERY EQUAL NUMBER { pmtu_discovery=$3; }
+		| PMTU_DISCOVERY EQUAL error { yyerror("boolean value expected"); }
 		| MPATH EQUAL STRING { mpath=$3; strcpy(mpath_buf, $3);
 								mpath_len=strlen($3); 
 								if(mpath_buf[mpath_len-1]!='/') {
