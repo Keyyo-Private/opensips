@@ -81,6 +81,7 @@ int include_callid      = DEF_INCLUDE_CALLID;
 int include_localremote = DEF_INCLUDE_LOCALREMOTE;
 int include_tags        = DEF_INCLUDE_TAGS;
 int caller_confirmed    = DEF_CALLER_ALWAYS_CONFIRMED;
+int early_timeout = -1;
 str presence_server = {0, 0};
 static str peer_dlg_var = {"dlg_peer", 8};
 static str entity_dlg_var = {"dlg_entity", 10};
@@ -119,6 +120,7 @@ static param_export_t params[]={
 	{"include_tags",        INT_PARAM, &include_tags },
 	{"caller_confirmed",    INT_PARAM, &caller_confirmed },
 	{"publish_on_trying",   INT_PARAM, &publish_on_trying },
+	{"early_timeout",       INT_PARAM, &early_timeout },
 	{"presence_server",     STR_PARAM, &presence_server.s },
 	{"caller_spec_param",   STR_PARAM, &caller_spec_param.s },
 	{"callee_spec_param",   STR_PARAM, &callee_spec_param.s },
@@ -445,17 +447,17 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 		{
 			if (caller_confirmed) {
 				dialog_publish("confirmed", &from, &peer_to_body, &(dlg->callid), 1,
-					dlg->lifetime, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+					early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
 			} else {
 				dialog_publish("early", &from, &peer_to_body, &(dlg->callid), 1,
-					dlg->lifetime, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+					early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
 			}
 		}
 
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
 		{
 			dialog_publish("early", &peer_to_body, &from, &(dlg->callid), 0,
-				dlg->lifetime, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+				early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
 		}
 		break;
 	default:
