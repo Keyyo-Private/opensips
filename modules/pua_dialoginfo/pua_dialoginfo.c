@@ -49,8 +49,11 @@
 #include "../dialog/dlg_hash.h"
 #include "../pua/pua_bind.h"
 #include "pua_dialoginfo.h"
+#include "../../parser/parse_content.h"
+#include "../../parser/sdp/sdp_helpr_funcs.h"
 
-
+#define AUDIO_STR "audio"
+#define AUDIO_STR_LEN 5
 
 /* Default module parameter values */
 #define DEF_INCLUDE_CALLID 1
@@ -234,6 +237,36 @@ __dialog_cbtest(struct dlg_cell *dlg, int type, struct dlg_cb_params *_params)
 }
 #endif
 
+static int
+is_rendering(struct sip_msg *msg)
+{
+	int sdp_session_num = 0, sdp_stream_num;
+	sdp_session_cell_t* sdp_session;
+	sdp_stream_cell_t* sdp_stream;
+
+	if (0 == parse_sdp(msg)) {
+		for(;;) {
+			sdp_session = get_sdp_session(msg, sdp_session_num);
+			if(!sdp_session) break;
+			sdp_stream_num = 0;
+			for(;;) {
+				sdp_stream = get_sdp_stream(msg, sdp_session_num, sdp_stream_num);
+				if(!sdp_stream) break;
+				if(sdp_stream->media.len==AUDIO_STR_LEN &&
+					strncmp(sdp_stream->media.s,AUDIO_STR,AUDIO_STR_LEN)==0) {
+					if(sdp_stream->is_on_hold)
+						return 0;
+					else
+						return 1;
+				}
+				sdp_stream_num++;
+			}
+			sdp_session_num++;
+		}
+	}
+	return -1;
+}
+
 static void
 __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_params)
 {
@@ -246,6 +279,8 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 	str entity_uri= {0, 0};
 	int buf_len = 255;
 	struct sip_msg* msg = _params->msg;
+	int local_rendering = -1;
+	int remote_rendering = -1;
 
 	flag_str.s = &flag;
 	flag_str.len = 1;
@@ -303,15 +338,28 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 		LM_DBG("from uri = %.*s\n", from.uri.len, from.uri.s);
 	}
 
+	if (_params->msg && _params->msg != FAKED_REPLY )
+	{
+		if (_params->direction == DLG_DIR_DOWNSTREAM)
+		{
+			local_rendering = is_rendering(_params->msg);
+		}
+
+		if (_params->direction == DLG_DIR_UPSTREAM)
+		{
+			remote_rendering = is_rendering(_params->msg);
+		}
+	}
+
 	switch (type) {
 	case DLGCB_FAILED:
 	case DLGCB_TERMINATED:
 	case DLGCB_EXPIRED:
 		LM_DBG("dialog over, from=%.*s\n", dlg->from_uri.len, dlg->from_uri.s);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
-			dialog_publish("terminated", &from, &peer_to_body, &(dlg->callid), 1, 0, 0, 0);
+			dialog_publish("terminated", &from, &peer_to_body, &(dlg->callid), 1, 0, 0, 0, local_rendering, remote_rendering);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
-			dialog_publish("terminated", &peer_to_body, &from, &(dlg->callid), 0, 0, 0, 0);
+			dialog_publish("terminated", &peer_to_body, &from, &(dlg->callid), 0, 0, 0, 0, remote_rendering, local_rendering);
 		break;
 	case DLGCB_RESPONSE_WITHIN:
 		if (get_cseq(msg)->method_id==METHOD_INVITE) {
@@ -327,9 +375,9 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 	case DLGCB_CONFIRMED:
 		LM_DBG("dialog confirmed, from=%.*s\n", dlg->from_uri.len, dlg->from_uri.s);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
-			dialog_publish("confirmed", &from, &peer_to_body, &(dlg->callid), 1, dlg->lifetime, 0, 0);
+			dialog_publish("confirmed", &from, &peer_to_body, &(dlg->callid), 1, dlg->lifetime, 0, 0, local_rendering, remote_rendering);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
-			dialog_publish("confirmed", &peer_to_body, &from, &(dlg->callid), 0, dlg->lifetime, 0, 0);
+			dialog_publish("confirmed", &peer_to_body, &from, &(dlg->callid), 0, dlg->lifetime, 0, 0, remote_rendering, local_rendering);
 		break;
 	case DLGCB_EARLY:
 		LM_DBG("dialog is early, from=%.*s\n", from.uri.len, from.uri.s);
@@ -351,42 +399,42 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 			{
 				if (caller_confirmed) {
 					dialog_publish("confirmed", &from, &peer_to_body, &(dlg->callid), 1,
-						dlg->lifetime, &(dlg->legs[DLG_CALLER_LEG].tag), &tag);
+						dlg->lifetime, &(dlg->legs[DLG_CALLER_LEG].tag), &tag, local_rendering, remote_rendering);
 				} else {
 					dialog_publish("early", &from, &peer_to_body, &(dlg->callid), 1,
-						dlg->lifetime, &(dlg->legs[DLG_CALLER_LEG].tag), &tag);
+						dlg->lifetime, &(dlg->legs[DLG_CALLER_LEG].tag), &tag, local_rendering, remote_rendering);
 				}
 			}
 
 			if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
 			{
 				dialog_publish("early", &peer_to_body, &from, &(dlg->callid), 0,
-					dlg->lifetime, &tag, &(dlg->legs[DLG_CALLER_LEG].tag));
+					dlg->lifetime, &tag, &(dlg->legs[DLG_CALLER_LEG].tag), remote_rendering, local_rendering);
 			}
 		} else {
 			if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
 			{
 				if (caller_confirmed) {
 					dialog_publish("confirmed", &from, &peer_to_body, &(dlg->callid), 1,
-						dlg->lifetime, 0, 0);
+						dlg->lifetime, 0, 0, local_rendering, remote_rendering);
 				} else {
 					dialog_publish("early", &from, &peer_to_body, &(dlg->callid), 1,
-						dlg->lifetime, 0, 0);
+						dlg->lifetime, 0, 0, local_rendering, remote_rendering);
 				}
 			}
 			if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
 			{
 				dialog_publish("early", &peer_to_body, &from, &(dlg->callid), 0,
-					dlg->lifetime, 0, 0);
+					dlg->lifetime, 0, 0, remote_rendering, local_rendering);
 			}
 		}
 		break;
 	default:
 		LM_ERR("unhandled dialog callback type %d received, from=%.*s\n", type, dlg->from_uri.len, dlg->from_uri.s);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
-			dialog_publish("terminated", &from, &peer_to_body, &(dlg->callid), 1, 0, 0, 0);
+			dialog_publish("terminated", &from, &peer_to_body, &(dlg->callid), 1, 0, 0, 0, local_rendering, remote_rendering);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
-			dialog_publish("terminated", &peer_to_body, &from, &(dlg->callid), 0, 0, 0, 0);
+			dialog_publish("terminated", &peer_to_body, &from, &(dlg->callid), 0, 0, 0, 0, remote_rendering, local_rendering);
 	}
 error:
 	if(peer_uri.s)
@@ -789,10 +837,10 @@ default_callee:
 
         if(publish_on_trying) {
 	        if(flag == DLG_PUB_A || flag == DLG_PUB_AB)
-		        dialog_publish("trying", from, &peer_to_body, &(dlg->callid), 1, DEFAULT_CREATED_LIFETIME, 0, 0);
+		        dialog_publish("trying", from, &peer_to_body, &(dlg->callid), 1, DEFAULT_CREATED_LIFETIME, 0, 0, is_rendering(msg), -1);
 
 	        if(flag == DLG_PUB_B || flag == DLG_PUB_AB)
-		        dialog_publish("trying", &peer_to_body, from, &(dlg->callid), 0, DEFAULT_CREATED_LIFETIME, 0, 0);
+		        dialog_publish("trying", &peer_to_body, from, &(dlg->callid), 0, DEFAULT_CREATED_LIFETIME, 0, 0, -1, is_rendering(msg));
         }
 
 	ret=1;

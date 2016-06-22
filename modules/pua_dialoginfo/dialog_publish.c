@@ -56,7 +56,8 @@ void print_publ(publ_info_t* p)
 }
 
 str* build_dialoginfo(char *state, struct to_body *entity, struct to_body *peer,
-		str *callid, unsigned int initiator, str *localtag, str *remotetag)
+		str *callid, unsigned int initiator, str *localtag, str *remotetag,
+		int local_rendering, int remote_rendering)
 {
 	xmlDocPtr  doc = NULL;
 	xmlNodePtr root_node = NULL;
@@ -66,6 +67,7 @@ str* build_dialoginfo(char *state, struct to_body *entity, struct to_body *peer,
 	xmlNodePtr local_node = NULL;
 	xmlNodePtr tag_node = NULL;
 	xmlNodePtr id_node = NULL;
+	xmlNodePtr rendering_node = NULL;
 	str *body= NULL;
 	char buf[MAX_URI_SIZE+1];
 
@@ -188,6 +190,13 @@ str* build_dialoginfo(char *state, struct to_body *entity, struct to_body *peer,
 		}
 		xmlNewProp(tag_node, BAD_CAST "uri", BAD_CAST buf);
 
+		if( remote_rendering != -1)
+		{
+			rendering_node = xmlNewChild(tag_node, NULL, BAD_CAST "param", NULL) ;
+			xmlNewProp(rendering_node, BAD_CAST "pname", BAD_CAST "+sip.rendering");
+			xmlNewProp(rendering_node, BAD_CAST "pval", BAD_CAST (remote_rendering ? "yes" : "no"));
+		}
+
 		/* if a display name present - add the display name information */
 		if(peer->display.s)
 		{
@@ -234,6 +243,13 @@ str* build_dialoginfo(char *state, struct to_body *entity, struct to_body *peer,
 			goto error;
 		}
 		xmlNewProp(tag_node, BAD_CAST "uri", BAD_CAST buf);
+
+		if( local_rendering != -1)
+		{
+			rendering_node = xmlNewChild(tag_node, NULL, BAD_CAST "param", NULL) ;
+			xmlNewProp(rendering_node, BAD_CAST "pname", BAD_CAST "+sip.rendering");
+			xmlNewProp(rendering_node, BAD_CAST "pval", BAD_CAST (local_rendering ? "yes" : "no"));
+		}
 
 		/* if a display name present - add the display name information */
 		if(entity->display.s)
@@ -291,13 +307,14 @@ error:
 }
 
 void dialog_publish(char *state, struct to_body* entity, struct to_body *peer, str *callid,
-	unsigned int initiator, unsigned int lifetime, str *localtag, str *remotetag)
+	unsigned int initiator, unsigned int lifetime, str *localtag, str *remotetag,
+	int local_rendering, int remote_rendering)
 {
 	str* body= NULL;
 	publ_info_t publ;
 	int ret_code;
 
-	body= build_dialoginfo(state, entity, peer, callid, initiator, localtag, remotetag);
+	body= build_dialoginfo(state, entity, peer, callid, initiator, localtag, remotetag, local_rendering, remote_rendering);
 	if(body == NULL || body->s == NULL)
 	{
 		LM_ERR("failed to construct dialoginfo body\n");
