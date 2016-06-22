@@ -54,7 +54,7 @@
 #include "pidf.h"
 
 
-#define PUA_TABLE_VERSION 8
+#define PUA_TABLE_VERSION 9
 
 struct tm_binds tmb;
 htable_t* HashT= NULL;
@@ -89,6 +89,7 @@ static str str_record_route_col= str_init("record_route");
 static str str_contact_col= str_init("contact");
 static str str_remote_contact_col= str_init("remote_contact");
 static str str_extra_headers_col= str_init("extra_headers");
+static str str_outbound_proxy_col = str_init("outbound_proxy");
 static str str_desired_expires_col= str_init("desired_expires");
 static str str_version_col = str_init("version");
 
@@ -299,11 +300,13 @@ static int db_restore(void)
 	str watcher_uri, call_id;
 	str to_tag, from_tag, remote_contact;
 	str record_route, contact, extra_headers;
+	str outbound_proxy;
 	int size= 0, i;
 	int n_result_cols= 0;
 	int puri_col,touri_col,pid_col,expires_col,flag_col,etag_col, desired_expires_col;
 	int watcher_col,callid_col,totag_col,fromtag_col,cseq_col,remote_contact_col;
 	int event_col,contact_col,tuple_col,record_route_col, extra_headers_col;
+	int outbound_proxy_col;
 	int version_col;
 	int no_rows = 10;
 
@@ -324,6 +327,7 @@ static int db_restore(void)
 	result_cols[contact_col= n_result_cols++]	= &str_contact_col;
 	result_cols[remote_contact_col= n_result_cols++]	= &str_remote_contact_col;
 	result_cols[extra_headers_col= n_result_cols++]	= &str_extra_headers_col;
+	result_cols[outbound_proxy_col= n_result_cols++] = &str_outbound_proxy_col;
 	result_cols[desired_expires_col= n_result_cols++]	= &str_desired_expires_col;
 	result_cols[version_col= n_result_cols++]	= &str_version_col;
 
@@ -405,6 +409,7 @@ static int db_restore(void)
 			memset(&contact,         0, sizeof(str));
 			memset(&remote_contact,  0, sizeof(str));
 			memset(&extra_headers,   0, sizeof(str));
+			memset(&outbound_proxy,  0, sizeof(str));
 
 			pres_id.s= (char*)row_vals[pid_col].val.string_val;
 			if(pres_id.s)
@@ -462,6 +467,16 @@ static int db_restore(void)
 
 			size= sizeof(ua_pres_t)+ sizeof(str)+ (pres_uri.len+ pres_id.len+
 						tuple_id.len)* sizeof(char);
+
+			outbound_proxy.s= (char*)row_vals[outbound_proxy_col].val.string_val;
+
+			if(outbound_proxy.s) {
+				outbound_proxy.len= strlen(outbound_proxy.s);
+				size+= sizeof(str)+ outbound_proxy.len* sizeof(char);
+			} else
+				outbound_proxy.len= 0;
+
+		
 
 			if(watcher_uri.s)
 				size+= sizeof(str)+ to_uri.len + watcher_uri.len+ call_id.len+ to_tag.len+
@@ -521,6 +536,16 @@ static int db_restore(void)
 				p->remote_contact.len= remote_contact.len;
 
 				p->version= row_vals[version_col].val.int_val;
+			}
+
+			if(outbound_proxy.s)
+			{
+				p->outbound_proxy= (str*)((char*)p+ size);
+				size+= sizeof(str);
+				p->outbound_proxy->s= (char*)p+ size;
+				memcpy(p->outbound_proxy->s, outbound_proxy.s, outbound_proxy.len);
+				p->outbound_proxy->len= outbound_proxy.len;
+				size+= outbound_proxy.len;
 			}
 
 			LM_DBG("size= %d\n", size);
@@ -776,7 +801,7 @@ static void db_update(unsigned int ticks,void *param)
 	int puri_col,touri_col,pid_col,expires_col,flag_col,etag_col,tuple_col,event_col;
 	int watcher_col,callid_col,totag_col,fromtag_col,record_route_col,cseq_col;
 	int no_lock= 0, contact_col, desired_expires_col, extra_headers_col;
-	int remote_contact_col, version_col;
+	int outbound_proxy_col, remote_contact_col, version_col;
 
 	if(ticks== 0 && param == NULL)
 		no_lock= 1;
@@ -870,6 +895,11 @@ static void db_update(unsigned int ticks,void *param)
 	q_cols[touri_col= n_query_cols] = &str_to_uri_col;
 	q_vals[touri_col].type = DB_STR;
 	q_vals[touri_col].nul = 0;
+	n_query_cols++;
+
+	q_cols[outbound_proxy_col= n_query_cols] = &str_outbound_proxy_col;
+	q_vals[outbound_proxy_col].type = DB_STR;
+	q_vals[outbound_proxy_col].nul = 0;
 	n_query_cols++;
 
 	/* must keep this the last  column to be inserted */
@@ -1012,6 +1042,11 @@ static void db_update(unsigned int ticks,void *param)
 					q_vals[contact_col].val.str_val = p->contact;
 					q_vals[remote_contact_col].val.str_val = p->remote_contact;
 					q_vals[extra_headers_col].val.str_val = p->extra_headers;
+
+					if(p->outbound_proxy)
+						q_vals[outbound_proxy_col].val.str_val = *(p->outbound_proxy);
+					else
+						memset(&q_vals[outbound_proxy_col].val.str_val, 0, sizeof(str));
 
 					if(pua_dbf.insert(pua_db, q_cols, q_vals, n_query_cols)< 0)
 					{

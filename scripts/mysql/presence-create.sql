@@ -68,7 +68,7 @@ CREATE TABLE xcap (
 
 CREATE INDEX source_idx ON xcap (source);
 
-INSERT INTO version (table_name, table_version) values ('pua','8');
+INSERT INTO version (table_name, table_version) values ('pua','9');
 CREATE TABLE pua (
     id INT(10) UNSIGNED AUTO_INCREMENT PRIMARY KEY NOT NULL,
     pres_uri CHAR(128) NOT NULL,
@@ -89,6 +89,7 @@ CREATE TABLE pua (
     contact CHAR(128),
     remote_contact CHAR(128),
     version INT(11),
+    outbound_proxy CHAR(128),
     extra_headers TEXT
 ) ENGINE=MyISAM;
 

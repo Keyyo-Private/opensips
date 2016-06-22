@@ -72,7 +72,7 @@ CREATE TABLE xcap (
 ALTER SEQUENCE xcap_id_seq MAXVALUE 2147483647 CYCLE;
 CREATE INDEX xcap_source_idx ON xcap (source);
 
-INSERT INTO version (table_name, table_version) values ('pua','8');
+INSERT INTO version (table_name, table_version) values ('pua','9');
 CREATE TABLE pua (
     id SERIAL PRIMARY KEY NOT NULL,
     pres_uri VARCHAR(128) NOT NULL,
@@ -93,6 +93,7 @@ CREATE TABLE pua (
     contact VARCHAR(128),
     remote_contact VARCHAR(128),
     version INTEGER,
+    outbound_proxy VARCHAR(128),
     extra_headers TEXT
 );
 
