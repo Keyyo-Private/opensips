@@ -377,7 +377,7 @@ int check_if_dialog(str body, int *is_dialog)
 	doc = xmlParseMemory(body.s, body.len);
 	if(doc== NULL)
 	{
-		LM_ERR("failed to parse xml document\n");
+		LM_ERR("failed to parse xml document [%.*s]\n", body.len, body.s);
 		return -1;
 	}
 
@@ -1056,7 +1056,7 @@ char* extract_sphere(str body)
 	doc= xmlParseMemory(body.s, body.len);
 	if(doc== NULL)
 	{
-		LM_ERR("failed to parse xml body\n");
+		LM_ERR("failed to parse xml body [%.*s]\n", body.len, body.s);
 		return NULL;
 	}
 
@@ -1470,7 +1470,7 @@ str* xml_dialog2presence(str* pres_uri, str* body)
 	dlg_doc = xmlParseMemory(body->s, body->len);
 	if(dlg_doc == NULL)
 	{
-		LM_ERR("Wrong formated xml document\n");
+		LM_ERR("Wrong formated xml document  [%.*s]\n", body->len, body->s);
 		return NULL;
 	}
 	dialog_node = xmlNodeGetNodeByName(dlg_doc->children, "dialog", 0);
