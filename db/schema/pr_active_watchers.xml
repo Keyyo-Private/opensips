@@ -9,7 +9,7 @@
 
 <table id="active_watchers" xmlns:db="http://docbook.org/ns/docbook">
     <name>active_watchers</name>
-    <version>11</version>
+    <version>12</version>
     <type db="mysql">&MYSQL_TABLE_TYPE;</type>
     <description>
         <db:para>Table for the presence module. More information can be found at: &OPENSIPS_MOD_DOC;presence.html
@@ -180,6 +180,14 @@
         <description>User Flag</description>
     </column>
 
+    <column>
+        <name>accept_encoding</name>
+        <type>int</type>
+        <size>11</size>
+        <null/>
+        <description>Accept Encoding</description>
+    </column>
+ 
     <index>
         <name>active_watchers_idx</name>
         <colref linkend="presentity_uri"/>

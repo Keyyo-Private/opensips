@@ -40,6 +40,7 @@
 #include "../../db/db_val.h"
 #include "../../socket_info.h"
 #include "../tm/tm_load.h"
+#include "../content_encoding/api.h"
 #include "../pua/hash.h"
 #include "presentity.h"
 #include "presence.h"
@@ -84,6 +85,7 @@ str str_received_time_col = str_init("received_time");
 str str_id_col = str_init("id");
 str str_sender_col = str_init("sender");
 str str_userflag_col = str_init("userflag");
+str str_accept_encoding_col = str_init("accept_encoding");
 
 char* get_status_str(int status_flag)
 {
@@ -109,20 +111,21 @@ inline void printf_subs(subs_t* subs)
 		"\n\t[w_user]= %.*s\t[w_domain]= %.*s\n\t[event]= %.*s\n\t[status]= %s"
 		"\n\t[expires]= %u\n\t[callid]= %.*s\t[local_cseq]=%d"
 		"\n\t[to_tag]= %.*s\t[from_tag]= %.*s""\n\t[contact]= %.*s"
-		"\t[record_route]= %.*s\n",subs->pres_uri.len,subs->pres_uri.s,
+		"\t[record_route]= %.*s\t[accept_encoding]= %d\n",subs->pres_uri.len,subs->pres_uri.s,
 		subs->to_user.len,subs->to_user.s,subs->to_domain.len,
 		subs->to_domain.s,subs->from_user.len,subs->from_user.s,
 		subs->from_domain.len,subs->from_domain.s,subs->event->name.len,
 		subs->event->name.s,get_status_str(subs->status),subs->expires,
 		subs->callid.len,subs->callid.s,subs->local_cseq,subs->to_tag.len,
 		subs->to_tag.s,subs->from_tag.len, subs->from_tag.s,subs->contact.len,
-		subs->contact.s,subs->record_route.len,subs->record_route.s);
+		subs->contact.s,subs->record_route.len,subs->record_route.s, subs->accept_encoding);
 }
 
-int build_str_hdr(subs_t* subs, int is_body, str* hdr, str* extra_hdrs)
+int build_str_hdr(subs_t* subs, int is_body, str* hdr, str* extra_hdrs, str* ce_hdr)
 {
 	int len = 0;
 	int extra_len = 0;
+	int ce_len = 0;
 	int lexpire_len;
 	char* lexpire_s;
 	char* p;
@@ -160,7 +163,10 @@ int build_str_hdr(subs_t* subs, int is_body, str* hdr, str* extra_hdrs)
 	if(extra_hdrs && extra_hdrs->s && extra_hdrs->len)
 		extra_len = extra_hdrs->len;
 
-	hdr->s = (char*)pkg_malloc(extra_len + len);
+	if(ce_hdr && ce_hdr->s && ce_hdr->len)
+		ce_len = ce_hdr->len;
+
+	hdr->s = (char*)pkg_malloc(extra_len + ce_len + len);
 	if(hdr->s== NULL)
 	{
 		LM_ERR("while allocating memory\n");
@@ -173,6 +179,12 @@ int build_str_hdr(subs_t* subs, int is_body, str* hdr, str* extra_hdrs)
 	{
 		memcpy(p, extra_hdrs->s, extra_len);
 		p+= extra_hdrs->len;
+	}
+
+	if (ce_len)
+	{
+		memcpy(p, ce_hdr->s, ce_len);
+		p+= ce_hdr->len;
 	}
 
 	memcpy(p ,"Event: ", 7);
@@ -1868,6 +1880,7 @@ int send_notify_request(subs_t* subs, subs_t * watcher_subs,
 	c_back_param *cb_param= NULL;
 	str* final_body= NULL;
 	str* aux_body = 0;
+	struct encoded_body *encoded_body = 0;
 	free_body_t* free_fct = 0;
 
 	LM_DBG("enter: have_body=%d force_null=%d dialog info:\n",
@@ -1965,15 +1978,6 @@ jump_over_body:
 		subs->reason.len= 7;
 	}
 
-	/* build extra headers */
-	if( build_str_hdr( subs, notify_body?1:0, &str_hdr,
-				extra_hdrs?extra_hdrs:&notify_extra_hdrs)< 0 )
-	{
-		LM_ERR("while building headers\n");
-		goto error;
-	}
-	LM_DBG("headers:\n%.*s\n", str_hdr.len, str_hdr.s);
-
 	/* construct the dlg_t structure */
 	td = build_dlg_t(subs);
 	if(td ==NULL)
@@ -1992,18 +1996,32 @@ jump_over_body:
 	if (notify_body && subs->event->aux_body_processing)
 		aux_body = subs->event->aux_body_processing(subs, notify_body);
 
+	if (ceb.encode_body) {
+		encoded_body = ceb.encode_body(aux_body?aux_body:notify_body, subs->accept_encoding);
+	}
+
+	/* build extra headers */
+	if( build_str_hdr( subs, notify_body?1:0, &str_hdr,
+				extra_hdrs?extra_hdrs:&notify_extra_hdrs,
+				encoded_body?&encoded_body->content_encoding_hdr:NULL)< 0)
+	{
+		LM_ERR("while building headers\n");
+		goto error;
+	}	
+	LM_DBG("headers:\n%.*s\n", str_hdr.len, str_hdr.s);
+
 #ifdef USE_TCP
         /* don't open new TCP connections if connection is down */
 	tcp_no_new_conn = 1;
 #endif
 
 	result = tmb.t_request_within
-		(&met,                          /* method*/
-		&str_hdr,                       /* extra headers*/
-		aux_body?aux_body:notify_body,  /* body*/
-		td,                             /* dialog structure*/
-		p_tm_callback,                  /* callback function*/
-		(void*)cb_param,                /* callback parameter*/
+		(&met,                                                          /* method*/
+		&str_hdr,                                                       /* extra headers*/
+		encoded_body?&encoded_body->body:aux_body?aux_body:notify_body,  /* body*/
+		td,                                                             /* dialog structure*/
+		p_tm_callback,                                                  /* callback function*/
+		(void*)cb_param,                                                /* callback parameter*/
 		NULL);
 
 #ifdef USE_TCP
@@ -2014,6 +2032,10 @@ jump_over_body:
 		if(aux_body->s)
 			subs->event->aux_free_body(aux_body->s);
 		pkg_free(aux_body);
+	}
+
+	if(encoded_body) {
+		ceb.free_encoded_body(encoded_body);
 	}
 
 	if(result< 0)

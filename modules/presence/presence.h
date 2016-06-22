@@ -41,6 +41,7 @@
 /* TM bind */
 extern struct tm_binds tmb;
 extern struct sig_binds sigb;
+extern struct content_encoding_binds ceb;
 
 /* DB module bind */
 extern db_func_t pa_dbf;

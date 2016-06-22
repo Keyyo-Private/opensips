@@ -610,6 +610,7 @@ int send_publish( publ_info_t* publ )
 		/* handle extra headers */
 		if(presentity->extra_headers.s) shm_free(presentity->extra_headers.s);
 		presentity->extra_headers.len= 0;
+		presentity->extra_headers.s= 0;
 		if(publ->extra_headers && publ->extra_headers->s && publ->extra_headers->len)
 		{
 			presentity->extra_headers.s= (char*)shm_malloc(publ->extra_headers->len);

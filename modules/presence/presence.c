@@ -50,6 +50,7 @@
 #include "../../usr_avp.h"
 #include "../tm/tm_load.h"
 #include "../signaling/signaling.h"
+#include "../content_encoding/api.h"
 #include "../../pt.h"
 #include "../../mi/mi.h"
 #include "../pua/hash.h"
@@ -63,7 +64,7 @@
 
 #define S_TABLE_VERSION  4
 #define P_TABLE_VERSION  5
-#define ACTWATCH_TABLE_VERSION 10
+#define ACTWATCH_TABLE_VERSION 11
 
 char *log_buf = NULL;
 static int clean_period=100;
@@ -85,6 +86,8 @@ evlist_t* EvList= NULL;
 struct tm_binds tmb;
 /* SIGNALING bind */
 struct sig_binds sigb;
+/* Content Encoding bind */
+struct content_encoding_binds ceb;
 
 /** module functions */
 
@@ -253,6 +256,13 @@ static int mod_init(void)
 	{
 		LM_ERR("can't load tm functions\n");
 		return -1;
+	}
+
+	/* Optionaly load content encoding */
+	memset(&ceb, 0, sizeof(struct content_encoding_binds));
+	if(load_content_encoding_api(&ceb)==0)
+	{
+		LM_DBG("content encoding functions loaded\n");
 	}
 
 	if(db_url.s== NULL)

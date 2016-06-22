@@ -168,6 +168,7 @@ subs_t* mem_copy_subs(subs_t* s, int mem_type)
 	dest->db_flag= s->db_flag;
 	dest->sockinfo= s->sockinfo;
 	dest->user_flag = s->user_flag;
+	dest->accept_encoding = s->accept_encoding;
 
 	return dest;
 
@@ -226,6 +227,7 @@ subs_t* mem_copy_subs_noc(subs_t* s)
 	dest->db_flag= s->db_flag;
 	dest->sockinfo = s->sockinfo;
 	dest->user_flag = s->user_flag;
+	dest->accept_encoding = s->accept_encoding;
 
 	dest->contact.s= (char*)shm_malloc(s->contact.len);
 	if(dest->contact.s== NULL)

@@ -33,6 +33,7 @@
 #include "../../parser/parse_expires.h"
 #include "../../parser/parse_event.h"
 #include "../../parser/contact/parse_contact.h"
+#include "../../parser/parse_accept_encoding.h"
 #include "presence.h"
 #include "subscribe.h"
 #include "utils_func.h"
@@ -174,8 +175,8 @@ int delete_db_subs(str pres_uri, str ev_stored_name, str to_tag)
 int update_subs_db(subs_t* subs, int type)
 {
 	static db_ps_t my_ps_remote = NULL, my_ps_local = NULL;
-	db_key_t query_cols[22], update_keys[8];
-	db_val_t query_vals[22], update_vals[8];
+	db_key_t query_cols[23], update_keys[9];
+	db_val_t query_vals[23], update_vals[9];
 	int n_update_cols= 0;
 	int n_query_cols = 0;
 
@@ -298,6 +299,13 @@ int update_subs_db(subs_t* subs, int type)
 	update_vals[n_update_cols].nul = 0;
 	update_vals[n_update_cols].val.int_val = subs->user_flag;
 	n_update_cols++;
+
+	update_keys[n_update_cols] = &str_accept_encoding_col;
+	update_vals[n_update_cols].type = DB_INT;
+	update_vals[n_update_cols].nul = 0;
+	update_vals[n_update_cols].val.int_val = subs->accept_encoding;
+	n_update_cols++;
+
 
 	if(pa_dbf.update( pa_db,query_cols, 0, query_vals,
 				update_keys, update_vals, n_query_cols,n_update_cols)<0)
@@ -679,6 +687,11 @@ int handle_subscribe(struct sip_msg* msg, char* force_active_param, char* userfl
 	}
 	LM_DBG("subscription status= %s - %s\n", get_status_str(subs.status),
             found==0?"inserted":"found in watcher table");
+
+	/* store accepted encoding */
+	parse_accept_encoding(msg);
+	subs.accept_encoding = get_accept_encoding(msg);
+	LM_DBG("accept encoding : %d\n", get_accept_encoding(msg));
 
 	if(update_subscription(msg, &subs, init_req) <0)
 	{
@@ -1121,7 +1134,7 @@ int get_database_info(struct sip_msg* msg, subs_t* subs, int* reply_code, str* r
 	int n_query_cols = 0;
 	int n_result_cols = 0;
 	int remote_cseq_col= 0, local_cseq_col= 0, status_col, reason_col;
-	int record_route_col, version_col, userflag_col;
+	int record_route_col, version_col, userflag_col, accept_encoding_col;
 	int pres_uri_col;
 	unsigned int remote_cseq;
 	str pres_uri, record_route;
@@ -1196,6 +1209,7 @@ int get_database_info(struct sip_msg* msg, subs_t* subs, int* reply_code, str* r
 	result_cols[record_route_col=n_result_cols++] = &str_record_route_col;
 	result_cols[version_col=n_result_cols++] = &str_version_col;
 	result_cols[userflag_col=n_result_cols++] = &str_userflag_col;
+	result_cols[accept_encoding_col=n_result_cols++] = &str_accept_encoding_col;
 
 	if (pa_dbf.use_table(pa_db, &active_watchers_table) < 0)
 	{
@@ -1258,6 +1272,7 @@ int get_database_info(struct sip_msg* msg, subs_t* subs, int* reply_code, str* r
 	subs->local_cseq= row_vals[local_cseq_col].val.int_val;
 	subs->version= row_vals[version_col].val.int_val;
 	subs->user_flag= row_vals[userflag_col].val.int_val;
+	subs->accept_encoding= row_vals[accept_encoding_col].val.int_val;
 
 	if(subs->event->evp->parsed!= EVENT_DIALOG_SLA)
 	{
@@ -1344,17 +1359,18 @@ void update_db_subs(db_con_t *db,db_func_t dbf, shtable_t hash_table,
 {
 	static db_ps_t my_ps_delete = NULL;
 	static db_ps_t my_ps_update = NULL, my_ps_insert = NULL;
-	db_key_t query_cols[22], update_cols[8];
-	db_val_t query_vals[22], update_vals[8];
+	db_key_t query_cols[23], update_cols[9];
+	db_val_t query_vals[23], update_vals[9];
 	db_op_t update_ops[1];
 	subs_t* del_s;
 	int pres_uri_col, to_user_col, to_domain_col, from_user_col, from_domain_col,
 		callid_col, totag_col, fromtag_col, event_col,status_col, event_id_col,
 		local_cseq_col, remote_cseq_col, expires_col, record_route_col,
 		contact_col, local_contact_col, version_col,socket_info_col,reason_col,
-		userflag_col;
+		userflag_col, accept_encoding_col;
 	int u_expires_col, u_local_cseq_col, u_remote_cseq_col, u_version_col,
-		u_reason_col, u_status_col, u_contact_col, u_userflag_col;
+		u_reason_col, u_status_col, u_contact_col, u_userflag_col,
+		u_accept_encoding_col;
 	int i;
 	subs_t* s= NULL, *prev_s= NULL;
 	int n_query_cols= 0, n_update_cols= 0;
@@ -1467,6 +1483,11 @@ void update_db_subs(db_con_t *db,db_func_t dbf, shtable_t hash_table,
 	query_vals[userflag_col].nul = 0;
 	n_query_cols++;
 
+	query_cols[accept_encoding_col= n_query_cols]= &str_accept_encoding_col;
+	query_vals[accept_encoding_col].type = DB_INT;
+	query_vals[accept_encoding_col].nul = 0;
+	n_query_cols++;
+
 	/* cols and values used for update */
 	update_cols[u_expires_col= n_update_cols]= &str_expires_col;
 	update_vals[u_expires_col].type = DB_INT;
@@ -1506,6 +1527,11 @@ void update_db_subs(db_con_t *db,db_func_t dbf, shtable_t hash_table,
 	update_cols[u_userflag_col= n_update_cols]= &str_userflag_col;
 	update_vals[u_userflag_col].type = DB_INT;
 	update_vals[u_userflag_col].nul = 0;
+	n_update_cols++;
+
+	update_cols[u_accept_encoding_col= n_update_cols]= &str_accept_encoding_col;
+	update_vals[u_accept_encoding_col].type = DB_INT;
+	update_vals[u_accept_encoding_col].nul = 0;
 	n_update_cols++;
 
 	if (db==NULL){
@@ -1568,6 +1594,7 @@ void update_db_subs(db_con_t *db,db_func_t dbf, shtable_t hash_table,
 					update_vals[u_remote_cseq_col].val.int_val= s->remote_cseq;
 					update_vals[u_version_col].val.int_val= s->version;
 					update_vals[u_userflag_col].val.int_val= s->user_flag;
+					update_vals[u_accept_encoding_col].val.int_val= s->accept_encoding;
 					update_vals[u_status_col].val.int_val= s->status;
 					update_vals[u_reason_col].val.str_val= s->reason;
 					update_vals[u_contact_col].val.str_val= s->contact;
@@ -1607,6 +1634,7 @@ void update_db_subs(db_con_t *db,db_func_t dbf, shtable_t hash_table,
 					query_vals[status_col].val.int_val= s->status;
 					query_vals[reason_col].val.str_val= s->reason;
 					query_vals[userflag_col].val.int_val= s->user_flag;
+					query_vals[accept_encoding_col].val.int_val= s->accept_encoding;
 
 					if(s->sockinfo)
 						query_vals[socket_info_col].val.str_val= s->sockinfo->sock_str;
@@ -1656,8 +1684,8 @@ void update_db_subs(db_con_t *db,db_func_t dbf, shtable_t hash_table,
 int insert_subs_db(subs_t* s)
 {
 	static db_ps_t my_ps = NULL;
-	db_key_t query_cols[22];
-	db_val_t query_vals[22];
+	db_key_t query_cols[23];
+	db_val_t query_vals[23];
 	int n_query_cols= 0;
 
 	query_cols[n_query_cols] =&str_presentity_uri_col;
@@ -1792,6 +1820,12 @@ int insert_subs_db(subs_t* s)
 	query_vals[n_query_cols].val.int_val= s->user_flag;
 	n_query_cols++;
 
+	query_cols[n_query_cols]=&str_accept_encoding_col;
+	query_vals[n_query_cols].type = DB_INT;
+	query_vals[n_query_cols].nul = 0;
+	query_vals[n_query_cols].val.int_val= s->accept_encoding;
+	n_query_cols++;
+
 	if(pa_dbf.use_table(pa_db, &active_watchers_table)< 0)
 	{
 		LM_ERR("in use table\n");
@@ -1810,7 +1844,7 @@ int insert_subs_db(subs_t* s)
 
 int restore_db_subs(void)
 {
-	db_key_t result_cols[22];
+	db_key_t result_cols[23];
 	db_res_t *result= NULL;
 	db_row_t *rows = NULL;
 	db_val_t *row_vals= NULL;
@@ -1820,6 +1854,7 @@ int restore_db_subs(void)
 	int callid_col,totag_col,fromtag_col,to_domain_col,sockinfo_col,reason_col;
 	int event_col,contact_col,record_route_col, event_id_col, status_col;
 	int remote_cseq_col, local_cseq_col, local_contact_col, version_col, userflag_col;
+	int accept_encoding_col;
 	subs_t s;
 	str ev_sname, sockinfo_str;
 	pres_ev_t* event= NULL;
@@ -1852,6 +1887,7 @@ int restore_db_subs(void)
 	result_cols[status_col= n_result_cols++]	=&str_status_col;
 	result_cols[reason_col= n_result_cols++]	=&str_reason_col;
 	result_cols[userflag_col= n_result_cols++]	=&str_userflag_col;
+	result_cols[accept_encoding_col= n_result_cols++]=&str_accept_encoding_col;
 
 	if(!pa_db)
 	{
@@ -2025,6 +2061,7 @@ int restore_db_subs(void)
 			}
 
 			s.user_flag = row_vals[userflag_col].val.int_val;
+			s.accept_encoding = row_vals[accept_encoding_col].val.int_val;
 
 			hash_code= core_hash(&s.pres_uri, &s.event->name, shtable_size);
 			if(insert_shtable(subs_htable, hash_code, &s)< 0)
