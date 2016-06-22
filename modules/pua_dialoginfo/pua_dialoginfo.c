@@ -281,6 +281,7 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 	struct sip_msg* msg = _params->msg;
 	int local_rendering = -1;
 	int remote_rendering = -1;
+	str *to_tag =NULL, *from_tag = NULL;
 
 	flag_str.s = &flag;
 	flag_str.len = 1;
@@ -351,15 +352,35 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 		}
 	}
 
+	if (include_tags) {
+		/* get to tag*/
+		if ( (!_params->msg || _params->msg == FAKED_REPLY) || (!_params->msg->to && (parse_headers(_params->msg, HDR_TO_F,0)<0)) || !_params->msg->to)  {
+			LM_ERR("bad reply or missing TO hdr :-/\n");
+			tag.s = 0;
+			tag.len = 0;
+		} else {
+			tag = get_to(_params->msg)->tag_value;
+			if (tag.s==0 || tag.len==0) {
+				LM_ERR("missing TAG param in TO hdr :-/\n");
+				tag.s = 0;
+				tag.len = 0;
+			} else {
+				to_tag =&tag;
+			}
+		}
+		from_tag = &(dlg->legs[DLG_CALLER_LEG].tag);
+		LM_DBG("FROMTAG: %s, TOTAG: %s\n", (from_tag ? from_tag->s : "null" )  , (to_tag ? to_tag->s : "null" ) ); 
+	}
+
 	switch (type) {
 	case DLGCB_FAILED:
 	case DLGCB_TERMINATED:
 	case DLGCB_EXPIRED:
 		LM_DBG("dialog over, from=%.*s\n", dlg->from_uri.len, dlg->from_uri.s);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
-			dialog_publish("terminated", &from, &peer_to_body, &(dlg->callid), 1, 0, 0, 0, local_rendering, remote_rendering);
+			dialog_publish("terminated", &from, &peer_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, local_rendering, remote_rendering);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
-			dialog_publish("terminated", &peer_to_body, &from, &(dlg->callid), 0, 0, 0, 0, remote_rendering, local_rendering);
+			dialog_publish("terminated", &peer_to_body, &from, &(dlg->callid), 0, 0, to_tag, from_tag, remote_rendering, local_rendering);
 		break;
 	case DLGCB_RESPONSE_WITHIN:
 		if (get_cseq(msg)->method_id==METHOD_INVITE) {
@@ -375,66 +396,35 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 	case DLGCB_CONFIRMED:
 		LM_DBG("dialog confirmed, from=%.*s\n", dlg->from_uri.len, dlg->from_uri.s);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
-			dialog_publish("confirmed", &from, &peer_to_body, &(dlg->callid), 1, dlg->lifetime, 0, 0, local_rendering, remote_rendering);
+			dialog_publish("confirmed", &from, &peer_to_body, &(dlg->callid), 1, dlg->lifetime, from_tag, to_tag, local_rendering, remote_rendering);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
-			dialog_publish("confirmed", &peer_to_body, &from, &(dlg->callid), 0, dlg->lifetime, 0, 0, remote_rendering, local_rendering);
+			dialog_publish("confirmed", &peer_to_body, &from, &(dlg->callid), 0, dlg->lifetime, to_tag, from_tag, remote_rendering, local_rendering);
 		break;
 	case DLGCB_EARLY:
 		LM_DBG("dialog is early, from=%.*s\n", from.uri.len, from.uri.s);
-		if (include_tags) {
-			/* get to tag*/
-			if ( !_params->msg->to && ((parse_headers(_params->msg, HDR_TO_F,0)<0) || !_params->msg->to) ) {
-				LM_ERR("bad reply or missing TO hdr :-/\n");
-				tag.s = 0;
-				tag.len = 0;
+		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
+		{
+			if (caller_confirmed) {
+				dialog_publish("confirmed", &from, &peer_to_body, &(dlg->callid), 1,
+					dlg->lifetime, from_tag, to_tag, local_rendering, remote_rendering);
 			} else {
-				tag = get_to(_params->msg)->tag_value;
-				if (tag.s==0 || tag.len==0) {
-					LM_ERR("missing TAG param in TO hdr :-/\n");
-					tag.s = 0;
-					tag.len = 0;
-				}
+				dialog_publish("early", &from, &peer_to_body, &(dlg->callid), 1,
+					dlg->lifetime, from_tag, to_tag, local_rendering, remote_rendering);
 			}
-			if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
-			{
-				if (caller_confirmed) {
-					dialog_publish("confirmed", &from, &peer_to_body, &(dlg->callid), 1,
-						dlg->lifetime, &(dlg->legs[DLG_CALLER_LEG].tag), &tag, local_rendering, remote_rendering);
-				} else {
-					dialog_publish("early", &from, &peer_to_body, &(dlg->callid), 1,
-						dlg->lifetime, &(dlg->legs[DLG_CALLER_LEG].tag), &tag, local_rendering, remote_rendering);
-				}
-			}
+		}
 
-			if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
-			{
-				dialog_publish("early", &peer_to_body, &from, &(dlg->callid), 0,
-					dlg->lifetime, &tag, &(dlg->legs[DLG_CALLER_LEG].tag), remote_rendering, local_rendering);
-			}
-		} else {
-			if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
-			{
-				if (caller_confirmed) {
-					dialog_publish("confirmed", &from, &peer_to_body, &(dlg->callid), 1,
-						dlg->lifetime, 0, 0, local_rendering, remote_rendering);
-				} else {
-					dialog_publish("early", &from, &peer_to_body, &(dlg->callid), 1,
-						dlg->lifetime, 0, 0, local_rendering, remote_rendering);
-				}
-			}
-			if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
-			{
-				dialog_publish("early", &peer_to_body, &from, &(dlg->callid), 0,
-					dlg->lifetime, 0, 0, remote_rendering, local_rendering);
-			}
+		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
+		{
+			dialog_publish("early", &peer_to_body, &from, &(dlg->callid), 0,
+				dlg->lifetime, to_tag, from_tag, remote_rendering, local_rendering);
 		}
 		break;
 	default:
 		LM_ERR("unhandled dialog callback type %d received, from=%.*s\n", type, dlg->from_uri.len, dlg->from_uri.s);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
-			dialog_publish("terminated", &from, &peer_to_body, &(dlg->callid), 1, 0, 0, 0, local_rendering, remote_rendering);
+			dialog_publish("terminated", &from, &peer_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, local_rendering, remote_rendering);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
-			dialog_publish("terminated", &peer_to_body, &from, &(dlg->callid), 0, 0, 0, 0, remote_rendering, local_rendering);
+			dialog_publish("terminated", &peer_to_body, &from, &(dlg->callid), 0, 0, to_tag, from_tag, remote_rendering, local_rendering);
 	}
 error:
 	if(peer_uri.s)
@@ -626,11 +616,11 @@ static int check_flag(char* flag, int len)
 	if(len != 1)
 		goto error;
 
-	if(flag[0] == DLG_PUB_A || flag[0] == DLG_PUB_B)
+	if(flag[0] == DLG_PUB_A || flag[0] == DLG_PUB_B || flag[0] == DLG_PUB_AB)
 		return 1;
 
 error:
-	LM_ERR("Wrong format for dialoginfo_set() parameter. Accepted values: A or B\n");
+	LM_ERR("Wrong format for dialoginfo_set() parameter. Accepted values: A, B or D\n");
 	return 0;
 }
 
@@ -654,6 +644,7 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 	str flag_str;
 	char caller_buf[256], callee_buf[256];
 	pv_value_t tok;
+	str tag, *from_tag;
 
 	peer_to_body.param_lst = FROM.param_lst = NULL;
 
@@ -834,13 +825,30 @@ default_callee:
 		goto end;
 	}
 #endif
+	if (include_tags) {
+		/* get from tag*/
+		if ( !msg->from && ((parse_headers(msg, HDR_FROM_F,0)<0) || !msg->from) ) {
+			LM_ERR("missing From hdr :-/\n");
+			tag.s = 0;
+			tag.len = 0;
+		} else {
+			tag = get_from(msg)->tag_value;
+			if (tag.s==0 || tag.len==0) {
+				LM_ERR("missing TAG param in From hdr :-/\n");
+				tag.s = 0;
+				tag.len = 0;
+			} else {
+				from_tag =&tag;
+			}
+		}
+	}
 
         if(publish_on_trying) {
 	        if(flag == DLG_PUB_A || flag == DLG_PUB_AB)
-		        dialog_publish("trying", from, &peer_to_body, &(dlg->callid), 1, DEFAULT_CREATED_LIFETIME, 0, 0, is_rendering(msg), -1);
+		        dialog_publish("trying", from, &peer_to_body, &(dlg->callid), 1, DEFAULT_CREATED_LIFETIME, from_tag, 0, is_rendering(msg), -1);
 
 	        if(flag == DLG_PUB_B || flag == DLG_PUB_AB)
-		        dialog_publish("trying", &peer_to_body, from, &(dlg->callid), 0, DEFAULT_CREATED_LIFETIME, 0, 0, -1, is_rendering(msg));
+		        dialog_publish("trying", &peer_to_body, from, &(dlg->callid), 0, DEFAULT_CREATED_LIFETIME, 0, from_tag, -1, is_rendering(msg));
         }
 
 	ret=1;
