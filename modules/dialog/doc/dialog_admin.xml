@@ -1570,12 +1570,14 @@ if (is_in_profile("caller","XX")) {
 		<example>
 		<title><function>get_profile_size</function> usage</title>
 		<programlisting format="linespecific">
+modparam("dialog", "profiles_no_value", "inboundCalls")
+modparam("dialog", "profiles_with_value", "caller")
 ...
-get_profile_size("inbound_call","$avp(size)");
-xlog("currently there are $avp(size) inbound calls\n");
+get_profile_size("inboundCalls",,"$var(size)");
+xlog("inboundCalls: $var(size)\n");
 ...
-get_profile_size("caller","$fu");
-xlog("currently, the user %fu has $avp(size) active outgoing calls\n");
+get_profile_size("caller", "$fu", "$var(size)");
+xlog("currently, the user $fu has $var(size) active outgoing calls\n");
 ...
 </programlisting>
 		</example>
@@ -2043,24 +2045,40 @@ if (has_totag()  &amp;&amp; (uri == myself)  &amp;&amp; is_method("INVITE|ACK|BY
 		<para>
 		Name: <emphasis>dlg_end_dlg</emphasis>
 		</para>
-		<para>Parameters:</para>
+		<para>
+		The accepted formats (as parameters) may be:
+		</para>
+		<itemizedlist>
+			<listitem>
+				<para>dlg_end_dlg h_entry h_id [extra_hdrs]</para>
+			</listitem>
+			<listitem>
+				<para>dlg_end_dlg dialog_id [extra_hdrs]</para>
+			</listitem>
+		</itemizedlist>
+		<para>Where:</para>
 		<itemizedlist>
 			<listitem><para>
-				<emphasis>h_entry</emphasis> - hash entry of the dialog in the
-				internal dialog table
+				<emphasis>h_entry</emphasis> - numerical hash entry of the 
+				dialog in the internal dialog table (provided by dlg_list)
 			</para></listitem>
 			<listitem><para>
-				<emphasis>h_id</emphasis> - hash id of the dialog on the hash
-				entry
+				<emphasis>h_id</emphasis> - numerical hash id of the dialog 
+				on the hash entry (provided by dlg_list)
 			</para></listitem>
 			<listitem><para>
-				<emphasis>extra_hdrs</emphasis> - (optional) string containg 
-				extra headers (full format) to be added to the BYE requests.
+				<emphasis>dialog_id</emphasis> - numerical unique ID of the 
+				dialog (as provided by dlg_list)
+			</para></listitem>
+			<listitem><para>
+				<emphasis>extra_hdrs</emphasis> - (optional) string containg
+				the extra headers (full format) to be added to the BYE
+				requests.
 			</para></listitem>
 		</itemizedlist>
 		<para>
-		The values for the h_entry and h_id can be get via the dlg_list
-		MI command.
+		The values for the h_entry and h_id or dialog_id can be get via 
+		the "dlg_list" MI command.
 		</para>
 		<para>
 		MI FIFO Command Format:

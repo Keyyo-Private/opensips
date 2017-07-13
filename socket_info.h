@@ -94,7 +94,7 @@ int fix_socket_list(struct socket_info **);
  *       Therefore it is CRUCIAL that you free ipList when you are done with
  *       its contents, to avoid a nasty memory leak.
  */
-int get_socket_list_from_proto(int **ipList, int protocol);
+int get_socket_list_from_proto(unsigned int **ipList, int protocol);
 
 /*
  * Returns the sum of the number of bytes waiting to be consumed on all network
@@ -124,6 +124,23 @@ struct socket_info* find_si(struct ip_addr* ip, unsigned short port,
 		} \
 	} while(0)
 
+static inline char *get_proto_name(enum sip_protos proto)
+{
+	switch (proto) {
+	case PROTO_NONE:
+		return "*";
+	case PROTO_UDP:
+		return "udp";
+	case PROTO_TCP:
+		return "tcp";
+	case PROTO_TLS:
+		return "tls";
+	case PROTO_SCTP:
+		return "sctp";
+	default:
+		return "unknown";
+	}
+}
 
 static inline struct socket_info** get_sock_info_list(unsigned short proto)
 {

@@ -1146,12 +1146,14 @@ if (is_in_profile("caller","XX")) {
    REPLY_ROUTE and FAILURE_ROUTE.
 
    Example 1.54. get_profile_size usage
+modparam("dialog", "profiles_no_value", "inboundCalls")
+modparam("dialog", "profiles_with_value", "caller")
 ...
-get_profile_size("inbound_call","$avp(size)");
-xlog("currently there are $avp(size) inbound calls\n");
+get_profile_size("inboundCalls",,"$var(size)");
+xlog("inboundCalls: $var(size)\n");
 ...
-get_profile_size("caller","$fu");
-xlog("currently, the user %fu has $avp(size) active outgoing calls\n");
+get_profile_size("caller", "$fu", "$var(size)");
+xlog("currently, the user $fu has $var(size) active outgoing calls\n");
 ...
 
 1.7.10.  set_dlg_flag(idx)
@@ -1464,15 +1466,22 @@ if (has_totag()  && (uri == myself)  && is_method("INVITE|ACK|BYE|UPDATE
 
    Name: dlg_end_dlg
 
-   Parameters:
-     * h_entry - hash entry of the dialog in the internal dialog
-       table
-     * h_id - hash id of the dialog on the hash entry
-     * extra_hdrs - (optional) string containg extra headers (full
-       format) to be added to the BYE requests.
+   The accepted formats (as parameters) may be:
+     * dlg_end_dlg h_entry h_id [extra_hdrs]
+     * dlg_end_dlg dialog_id [extra_hdrs]
 
-   The values for the h_entry and h_id can be get via the dlg_list
-   MI command.
+   Where:
+     * h_entry - numerical hash entry of the dialog in the
+       internal dialog table (provided by dlg_list)
+     * h_id - numerical hash id of the dialog on the hash entry
+       (provided by dlg_list)
+     * dialog_id - numerical unique ID of the dialog (as provided
+       by dlg_list)
+     * extra_hdrs - (optional) string containg the extra headers
+       (full format) to be added to the BYE requests.
+
+   The values for the h_entry and h_id or dialog_id can be get via
+   the "dlg_list" MI command.
 
    MI FIFO Command Format:
                 :dlg_end_dlg:_reply_fifo_file_

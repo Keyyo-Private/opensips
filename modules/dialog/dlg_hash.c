@@ -883,6 +883,7 @@ void next_state_dlg(struct dlg_cell *dlg, int event, int dir, int *old_state,
 			switch (dlg->state) {
 				case DLG_STATE_EARLY:
 				case DLG_STATE_CONFIRMED_NA:
+				case DLG_STATE_CONFIRMED:
 					break;
 				default:
 					log_next_state_dlg(event, dlg);
@@ -947,6 +948,11 @@ static inline int internal_mi_print_dlg(struct mi_node *rpl,
 
 	attr = addf_mi_attr( node, 0, "hash", 4, "%u:%u",
 			dlg->h_entry, dlg->h_id );
+	if (attr==0)
+		goto error;
+
+	attr = addf_mi_attr( node, 0, "dialog_id", 9, "%llu",
+			(((long long unsigned)dlg->h_entry)<<(8*sizeof(int)))+dlg->h_id );
 	if (attr==0)
 		goto error;
 

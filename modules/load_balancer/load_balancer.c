@@ -72,9 +72,9 @@ static void mod_destroy(void);
 static int mi_child_init();
 
 /* failover stuff */
-static str grp_avp_name_s = str_init("lb_grp");
-static str mask_avp_name_s = str_init("lb_mask");
-static str id_avp_name_s = str_init("lb_id");
+static str grp_avp_name_s = str_init("__lb_grp");
+static str mask_avp_name_s = str_init("__lb_mask");
+static str id_avp_name_s = str_init("__lb_id");
 int grp_avp_name;
 int mask_avp_name;
 int id_avp_name;
@@ -295,6 +295,32 @@ static int fixup_cnt_call(void** param, int param_no)
 	return -1;
 }
 
+static void lb_inherit_state(struct lb_data *old_data,struct lb_data *new_data)
+{
+	struct lb_dst *old_dst;
+	struct lb_dst *new_dst;
+
+	for ( new_dst=new_data->dsts ; new_dst ; new_dst=new_dst->next ) {
+		for ( old_dst=old_data->dsts ; old_dst ; old_dst=old_dst->next ) {
+			if (new_dst->id==old_dst->id &&
+			new_dst->group==old_dst->group &&
+			new_dst->uri.len==old_dst->uri.len &&
+			strncasecmp(new_dst->uri.s, old_dst->uri.s, old_dst->uri.len)==0) {
+				LM_DBG("DST %d/<%.*s> found in old set, copying state\n",
+					new_dst->group, new_dst->uri.len,new_dst->uri.s);
+				/* first reset the existing flags (only the flags related 
+				 * to state!!!) */
+				new_dst->flags &=
+					~(LB_DST_STAT_DSBL_FLAG|LB_DST_STAT_NOEN_FLAG);
+				/* copy the flags from the old node */
+				new_dst->flags |= (old_dst->flags &
+					(LB_DST_STAT_DSBL_FLAG|LB_DST_STAT_NOEN_FLAG));
+				break;
+			}
+		}
+	}
+}
+
 
 static inline int lb_reload_data( void )
 {
@@ -316,8 +342,12 @@ static inline int lb_reload_data( void )
 	lock_stop_write( ref_lock );
 
 	/* destroy old data */
-	if (old_data)
+	if (old_data) {
+		/* copy the state of the destinations from the old set
+		 * (for the matching ids) */
+		lb_inherit_state( old_data, new_data);
 		free_lb_data( old_data );
+	}
 
 	/* generate new blacklist from the routing info */
 	populate_lb_bls((*curr_data)->dsts);
@@ -612,15 +642,10 @@ static int w_count_call(struct sip_msg *req, char *ip, char *port, char *grp,
 
 	/* get the port */
 	if (port) {
-		if (pv_get_spec_value( req, (pv_spec_t*)port, &val)!=0) {
+		if (fixup_get_ivalue( req, (gparam_p)port, &port_no)!=0) {
 			LM_ERR("failed to get PORT value from PV\n");
 			return -1;
 		}
-		if ( (val.flags&PV_VAL_INT)==0 ) {
-			LM_ERR("PORT PV val is not integer\n");
-			return -1;
-		}
-		port_no = val.ri;
 	} else {
 		port_no = 0;
 	}

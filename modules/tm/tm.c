@@ -962,7 +962,7 @@ inline static int t_check_trans(struct sip_msg* msg, char *foo, char *bar)
 				return 0;
 			case -2:
 				/* e2e ACK found */
-				return 1;
+				return -1;
 			default:
 				/* notfound */
 				return -1;
@@ -1811,18 +1811,20 @@ int pv_set_tm_branch_avp(struct sip_msg *msg, pv_param_t *param, int op,
 	struct usr_avp **old_list=NULL;
 	struct usr_avp **avp_list=NULL;
 
-	if (!msg || !val)
+	if (!msg) {
+		LM_ERR("bavp set but no msg found!\n");
 		goto error;
-
-	avp_list = get_bavp_list();
-	if (!avp_list) {
-		pv_get_null(msg, param, val);
-		goto success;
 	}
 
 	if (!param) {
 		LM_ERR("bad parameters\n");
 		goto error;
+	}
+
+	avp_list = get_bavp_list();
+	if (!avp_list) {
+		LM_DBG("cannot find the branch avp list!\n");
+		return -2;
 	}
 
 	if (pv_get_avp_name(msg, param, &avp_name, &name_type)) {

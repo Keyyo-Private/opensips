@@ -169,32 +169,6 @@ static void free_sock_info(struct socket_info* si)
 }
 
 
-
-static char* get_proto_name(unsigned short proto)
-{
-	switch(proto){
-		case PROTO_NONE:
-			return "*";
-		case PROTO_UDP:
-			return "udp";
-#ifdef USE_TCP
-		case PROTO_TCP:
-			return "tcp";
-#endif
-#ifdef USE_TLS
-		case PROTO_TLS:
-			return "tls";
-#endif
-#ifdef USE_SCTP
-		case PROTO_SCTP:
-			return "sctp";
-#endif
-		default:
-			return "unknown";
-	}
-}
-
-
 /* checks if the proto: host:port is one of the address we listen on
  * and returns the corresponding socket_info structure.
  * if port==0, the  port number is ignored
@@ -264,6 +238,18 @@ struct socket_info* grep_sock_info(str* host, unsigned short port,
 				/* comp. must be case insensitive, host names
 				* can be in mixed case, it will also match
 				* ipv6 addresses if we are lucky*/
+				goto found;
+			/* if no advertised is specified on the interface, we should check
+			 * if it is the global address */
+			if (!si->adv_name_str.len && default_global_address.s &&
+				h_len == default_global_address.len &&
+				(strncasecmp(hname, default_global_address.s,
+					default_global_address.len)==0) /*slower*/)
+				/* this might match sockets that are not supposed to
+				 * match, when using multiple listeners for the same
+				 * protocol; but in that case the default_global_address
+				 * concept is broken, since there is no way to choose
+				 * the right socket */
 				goto found;
 			/* check if host == ip address */
 #ifdef USE_IPV6
@@ -409,7 +395,7 @@ error:
  * return: -1 on error, 0 on success
  */
 int add_interfaces(char* if_name, int family, unsigned short port,
-					unsigned short proto,
+					unsigned short proto, unsigned short children,
 					struct socket_info** list)
 {
 	struct ifconf ifc;
@@ -506,7 +492,7 @@ int add_interfaces(char* if_name, int family, unsigned short port,
 			if (ifrcopy.ifr_flags & IFF_LOOPBACK)
 				flags|=SI_IS_LO;
 			/* add it to one of the lists */
-			if (new_sock2list(tmp, port, proto, 0, 0, 0, flags, list)!=0){
+			if (new_sock2list(tmp, port, proto, 0, 0, children, flags, list)!=0){
 				LM_ERR("new_sock2list failed\n");
 				goto error;
 			}
@@ -548,7 +534,7 @@ int fix_socket_list(struct socket_info **list)
 	for (si=*list;si;){
 		next=si->next;
 		if (add_interfaces(si->name.s, AF_INET, si->port_no,
-							si->proto, list)!=-1){
+							si->proto, si->children, list)!=-1){
 			/* success => remove current entry (shift the entire array)*/
 			sock_listrm(list, si);
 			free_sock_info(si);
@@ -808,15 +794,15 @@ int fix_all_socket_lists(void)
 #endif
 		){
 		/* get all listening ipv4 interfaces */
-		if (add_interfaces(0, AF_INET, 0,  PROTO_UDP, &udp_listen)==0){
+		if (add_interfaces(0, AF_INET, 0,  PROTO_UDP, 0, &udp_listen)==0){
 			/* if ok, try to add the others too */
 #ifdef USE_TCP
 			if (!tcp_disable){
-				if (add_interfaces(0, AF_INET, 0,  PROTO_TCP, &tcp_listen)!=0)
+				if (add_interfaces(0, AF_INET, 0,  PROTO_TCP, 0, &tcp_listen)!=0)
 					goto error;
 #ifdef USE_TLS
 				if (!tls_disable){
-					if (add_interfaces(0, AF_INET, 0, PROTO_TLS,
+					if (add_interfaces(0, AF_INET, 0, PROTO_TLS, 0,
 								&tls_listen)!=0)
 					goto error;
 				}
@@ -825,7 +811,7 @@ int fix_all_socket_lists(void)
 #endif
 #ifdef USE_SCTP
 			if (!sctp_disable){
-				if (add_interfaces(0, AF_INET, 0, PROTO_SCTP, &sctp_listen)!=0)
+				if (add_interfaces(0, AF_INET, 0, PROTO_SCTP, 0, &sctp_listen)!=0)
 					goto error;
 			}
 #endif
@@ -916,7 +902,7 @@ error:
  *       Therefore it is CRUCIAL that you free ipList when you are done with its
  *       contents, to avoid a nasty memory leak.
  */
-int get_socket_list_from_proto(int **ipList, int protocol) {
+int get_socket_list_from_proto(unsigned int **ipList, int protocol) {
 
 	struct socket_info  *si;
 	struct socket_info** list;
@@ -1007,17 +993,17 @@ int get_socket_list_from_proto(int **ipList, int protocol) {
  * get_socket_list_from_proto() in this file.
  *
  */
-static int parse_proc_net_line(char *line, int *ipAddress, int *rx_queue)
+static int parse_proc_net_line(char *line, unsigned int *ipAddress, int *rx_queue)
 {
 	int i;
 
-	int ipOctetExtractionMask = 0xFF;
+	unsigned int ipOctetExtractionMask = 0xFF;
 
 	char *currColonLocation;
 	char *nextNonNumericalChar;
 	char *currentLocationInLine = line;
 
-	int parsedInteger[4];
+	unsigned int parsedInteger[4];
 
 	/* Example line from /proc/net/tcp or /proc/net/udp:
 	 *
@@ -1090,7 +1076,7 @@ static int parse_proc_net_line(char *line, int *ipAddress, int *rx_queue)
  * get_socket_list_from_proto() in this file.
  *
  * */
-static int match_ip_and_port(int *ipOne, int *ipArray, int sizeOf_ipArray)
+static int match_ip_and_port(unsigned int *ipOne, unsigned int *ipArray, int sizeOf_ipArray)
 {
 	int curIPAddrIdx;
 	int curOctetIdx;
@@ -1138,13 +1124,13 @@ static int match_ip_and_port(int *ipOne, int *ipArray, int sizeOf_ipArray)
  *       interface.  On other systems, zero will always be returned.
  */
 static int get_used_waiting_queue(
-		int forTCP, int *interfaceList, int listSize)
+		int forTCP, unsigned int *interfaceList, int listSize)
 {
 	FILE *fp;
 	char *fileToOpen;
 
 	char lineBuffer[MAX_PROC_BUFFER];
-	int  ipAddress[NUM_IP_OCTETS+1];
+	unsigned int  ipAddress[NUM_IP_OCTETS+1];
 	int  rx_queue;
 	int  waitingQueueSize = 0;
 
@@ -1200,9 +1186,9 @@ static int get_used_waiting_queue(
  */
 int get_total_bytes_waiting(int only_proto)
 {
-	static int *UDPList  = NULL;
-	static int *TCPList  = NULL;
-	static int *TLSList  = NULL;
+	static unsigned int *UDPList  = NULL;
+	static unsigned int *TCPList  = NULL;
+	static unsigned int *TLSList  = NULL;
 
 	static int numUDPSockets  = -1;
 	static int numTCPSockets  = -1;

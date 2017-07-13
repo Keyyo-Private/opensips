@@ -221,7 +221,7 @@ int b2b_msg_get_to(struct sip_msg* msg, str* to_uri, int flags)
 		}
 		if (msg->to->parsed == NULL)
 		{
-			if ( parse_to_uri( msg )<0 )
+			if (parse_to_uri( msg ) == NULL)
 			{
 				LM_ERR("cannot parse To header\n");
 				return -1;
@@ -1061,7 +1061,7 @@ int b2b_logic_notify_reply(int src, struct sip_msg* msg, str* key, str* body, st
 	}
 
 	method = get_cseq(msg)->method;
-	if(parse_method(method.s, method.s+method.len, &method_value)< 0)
+	if(parse_method(method.s, method.s+method.len, &method_value) == NULL)
 	{
 		LM_ERR("Failed to parse method\n");
 		goto error;
@@ -2904,7 +2904,7 @@ int b2b_scenario_parse_uri(xmlNodePtr value_node, char* value_content,
 		memcpy(buf, value.s, value.len);
 		buf[value.len] = ':';
 
-		if(parse_hname2(buf, buf + value.len+1, &hdr) < 0)
+		if(parse_hname2(buf, buf + value.len+1, &hdr) == 0)
 		{
 			LM_ERR("Failed to parse header name\n");
 			goto error;

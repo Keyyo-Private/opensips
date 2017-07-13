@@ -616,30 +616,27 @@ int check_ip_address(struct ip_addr* ip, str *name,
 
 	/* maybe we are lucky and name it's an ip */
 	s=ip_addr2a(ip);
-	if (s){
-		LM_DBG("params %s, %.*s, %d\n", s, name->len, name->s, resolver);
-		len=strlen(s);
-
-	#ifdef USE_IPV6
-		/* check if name->s is an ipv6 address or an ipv6 address ref. */
-		if ((ip->af==AF_INET6) &&
-				(	((len==name->len)&&(strncasecmp(name->s, s, name->len)==0))
-					||
-					((len==(name->len-2))&&(name->s[0]=='[')&&
-						(name->s[name->len-1]==']')&&
-						(strncasecmp(name->s+1, s, len)==0))
-				)
-		   )
-			return 0;
-		else
-	#endif
-
-			if (strncmp(name->s, s, name->len)==0)
-				return 0;
-	}else{
+	if (s==NULL) {
 		LM_CRIT("could not convert ip address\n");
 		return -1;
 	}
+
+	LM_DBG("params %s, %.*s, %d\n", s, name->len, name->s, resolver);
+	len=strlen(s);
+
+	/* force first a full matching (v4 and v6) */
+	if ( (len==name->len) && (strncasecmp(name->s, s, name->len)==0) )
+		return 0;
+
+	/* check if name->s is an ipv6 address ref. */
+	#ifdef USE_IPV6
+	if (ip->af==AF_INET6 &&
+		((len==(name->len-2))&&(name->s[0]=='[')&&
+			(name->s[name->len-1]==']')&&
+			(strncasecmp(name->s+1, s, len)==0))
+	)
+		return 0;
+	#endif
 
 	if (port==0) port=SIP_PORT;
 	if (resolver&DO_DNS){
@@ -1776,6 +1773,7 @@ struct hostent* sip_resolvehost( str* name, unsigned short* port,
 	struct rdata *head;
 	struct rdata *rd;
 	struct hostent* he;
+	unsigned short local_proto=PROTO_NONE;
 
 	if ( (is_sips)
 #ifdef USE_TLS
@@ -1789,6 +1787,9 @@ struct hostent* sip_resolvehost( str* name, unsigned short* port,
 	if (dn)
 		*dn = 0;
 
+	if (proto==NULL)
+		proto = &local_proto;
+
 	/* check if it's an ip address */
 	if ( ((ip=str2ip(name))!=0)
 #ifdef USE_IPV6
@@ -1796,7 +1797,7 @@ struct hostent* sip_resolvehost( str* name, unsigned short* port,
 #endif
 	){
 		/* we are lucky, this is an ip address */
-		if (proto && *proto==PROTO_NONE)
+		if (*proto==PROTO_NONE)
 			*proto = (is_sips)?PROTO_TLS:PROTO_UDP;
 		if (port && *port==0)
 			*port = (is_sips||((*proto)==PROTO_TLS))?SIPS_PORT:SIP_PORT;
@@ -1808,13 +1809,13 @@ struct hostent* sip_resolvehost( str* name, unsigned short* port,
 		/* have port -> no NAPTR, no SRV lookup, just A record lookup */
 		LM_DBG("has port -> do A record lookup!\n");
 		/* set default PROTO if not set */
-		if (proto && *proto==PROTO_NONE)
+		if (*proto==PROTO_NONE)
 			*proto = (is_sips)?PROTO_TLS:PROTO_UDP;
 		goto do_a;
 	}
 
 	/* no port... what about proto? */
-	if ( proto && (*proto)!=PROTO_NONE ) {
+	if ( (*proto)!=PROTO_NONE ) {
 		/* have proto, but no port -> do SRV lookup */
 		LM_DBG("no port, has proto -> do SRV lookup!\n");
 		if (is_sips && (*proto)!=PROTO_TLS) {
@@ -1825,7 +1826,7 @@ struct hostent* sip_resolvehost( str* name, unsigned short* port,
 	}
 
 	if ( dns_try_naptr==0 ) {
-		if (proto) *proto = (is_sips)?PROTO_TLS:PROTO_UDP;
+		*proto = (is_sips)?PROTO_TLS:PROTO_UDP;
 		goto do_srv;
 	}
 	LM_DBG("no port, no proto -> do NAPTR lookup!\n");

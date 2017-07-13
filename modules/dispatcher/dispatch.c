@@ -246,6 +246,7 @@ int add_dest2list(int id, str uri, struct socket_info *sock, int state,
 	}
 	hostent2ip_addr( &dp->ips[0], &proxy->host, proxy->addr_idx);
 	dp->ports[0] = proxy->port;
+	dp->protos[0] = proxy->proto;
 	dp->ips_cnt = 1;
 	LM_DBG("first gw ip addr [%s]:%d\n",
 		ip_addr2a(&dp->ips[0]), dp->ports[0]);
@@ -253,8 +254,10 @@ int add_dest2list(int id, str uri, struct socket_info *sock, int state,
 	while (dp->ips_cnt<DS_MAX_IPS && (get_next_su( proxy, &sau, 0)==0) ) {
 		su2ip_addr( &dp->ips[dp->ips_cnt], &sau);
 		dp->ports[dp->ips_cnt] = proxy->port;
-		LM_DBG("additional gw ip addr [%s]:%d\n",
-			ip_addr2a(&dp->ips[dp->ips_cnt]), dp->ports[dp->ips_cnt]);
+		dp->protos[dp->ips_cnt] = proxy->proto;
+		LM_DBG("additional gw ip addr [%s]:%d, proto %d\n",
+			ip_addr2a(&dp->ips[dp->ips_cnt]),
+			dp->ports[dp->ips_cnt], dp->protos[dp->ips_cnt]);
 		/* one more IP found */
 		dp->ips_cnt++;
 	}
@@ -571,6 +574,7 @@ static void ds_inherit_state( ds_data_t *old_data , ds_data_t *new_data)
 {
 	ds_set_p new_set, old_set;
 	ds_dest_p new_ds, old_ds;
+	int changed;
 
 	/* search the new sets through the old sets */
 	for ( new_set=new_data->sets ; new_set ; new_set=new_set->next ) {
@@ -583,6 +587,7 @@ static void ds_inherit_state( ds_data_t *old_data , ds_data_t *new_data)
 			continue;
 		}
 		LM_DBG("set id %d found in old sets\n",new_set->id);
+		changed = 0;
 
 		/* sets are matching, try to match the destinations, one by one */
 		for ( new_ds=new_set->dlist ; new_ds ; new_ds=new_ds->next ) {
@@ -591,7 +596,10 @@ static void ds_inherit_state( ds_data_t *old_data , ds_data_t *new_data)
 				strncasecmp(new_ds->uri.s, old_ds->uri.s, old_ds->uri.len)==0 ) {
 					LM_DBG("DST <%.*s> found in old set, copying state\n",
 						new_ds->uri.len,new_ds->uri.s);
-					new_ds->flags = old_ds->flags;
+					if (new_ds->flags != old_ds->flags) {
+						new_ds->flags = old_ds->flags;
+						changed = 1;
+					}
 					break;
 				}
 			}
@@ -599,6 +607,8 @@ static void ds_inherit_state( ds_data_t *old_data , ds_data_t *new_data)
 				LM_DBG("DST <%.*s> not found in old set\n",
 					new_ds->uri.len,new_ds->uri.s);
 		}
+		if (changed)
+			re_calculate_active_dsts(new_set);
 	}
 }
 
@@ -1251,7 +1261,7 @@ static inline int push_ds_2_avps( ds_dest_t *ds )
 	char buf[2+16+1]; /* a hexa string */
 	int_str avp_val;
 
-	avp_val.s.len = 1 + sprintf( buf, "%p", ds->sock );
+	avp_val.s.len = sprintf( buf, "%p", ds->sock );
 	avp_val.s.s = buf;
 	if(add_avp(AVP_VAL_STR|sock_avp_type, sock_avp_name, avp_val)!=0) {
 		LM_ERR("failed to add SOCK avp\n");
@@ -1448,6 +1458,11 @@ int ds_select_dst(struct sip_msg *msg, ds_select_ctl_p ds_select_ctl)
 				for( ds_id=0 ; ds_id<set_size ; ds_id++ )
 					if (ds_rand<idx->dlist[ds_id].running_weight)
 						break;
+				if (ds_id==set_size) {
+					LM_CRIT("BUG - no node found with weight %d in set %d\n",
+						ds_rand,idx->id);
+					goto error;
+				}
 			} else {
 				/* get a candidate simply based on hash */
 				ds_id = ds_hash % set_size;
@@ -1478,12 +1493,22 @@ int ds_select_dst(struct sip_msg *msg, ds_select_ctl_p ds_select_ctl)
 							if ( dst_is_active(idx->dlist[i]) &&
 							(ds_rand<idx->dlist[i].active_running_weight) )
 								break;
+						if (i==set_size) {
+							LM_CRIT("BUG - no active node found with "
+								"weight %d in set %d\n",ds_rand,idx->id);
+							goto error;
+						}
 					} else {
 						j = ds_hash % cnt;
 						/* translate this index to the full set of dsts */
 						for ( i=0 ; i<set_size ; i++ ) {
 							if ( dst_is_active(idx->dlist[i]) ) j--;
 							if (j<0) break;
+						}
+						if (i==set_size) {
+							LM_CRIT("BUG - no active node found with "
+								"in set %d\n",idx->id);
+							goto error;
 						}
 					}
 				}

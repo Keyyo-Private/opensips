@@ -63,7 +63,7 @@ MAIN_NAME=opensips
 #version number
 VERSION = 1
 PATCHLEVEL = 11
-SUBLEVEL = 8
+SUBLEVEL = 11
 EXTRAVERSION =
 
 RELEASE=$(VERSION).$(PATCHLEVEL).$(SUBLEVEL)$(EXTRAVERSION)
@@ -154,7 +154,7 @@ ifneq (,$(findstring gcc, $(CC_LONGVER)))
 	#XXX: for now treag 5.x the same as 4.x
 	CC_CLASS=$(shell echo "$(CC_SHORTVER)" | \
 				 sed -e 's/2\.9.*/2.9x/' -e 's/3\.[0-9]/3.x/' \
-				 -e 's/4\.[0-9]/4.x/' -e 's/5\.[0-9]/4.x/')
+				 -e 's/4\.[0-9]/4.x/' -e 's/[56]\.[0-9]/5.x/')
 endif
 
 ifneq (, $(findstring Sun, $(CC_LONGVER)))
@@ -491,6 +491,8 @@ DBHTMLXSL=$(shell \
 		echo "/usr/share/xml/docbook/stylesheet/nwalsh/html/docbook.xsl"; \
 	elif [ -e /usr/share/sgml/docbook/xsl-stylesheets/xhtml/docbook.xsl ]; then \
 		echo "/usr/share/sgml/docbook/xsl-stylesheets/xhtml/docbook.xsl"; \
+	elif [ -e /usr/share/xml/docbook/xsl-stylesheets*/xhtml/docbook.xsl ]; then \
+		ls -1 /usr/share/xml/docbook/xsl-stylesheets*/xhtml/docbook.xsl; \
 	fi)
 DBXML2HTMLPARAMS = --stringparam section.autolabel 1
 DBXML2HTMLPARAMS += --stringparam section.label.includes.component.label 1
@@ -527,7 +529,7 @@ ifneq (,$(findstring gcc, $(CC_LONGVER)))
 	#transform gcc version into 2.9x, 3.x or 4.x
 	CC_CLASS=$(shell echo "$(CC_SHORTVER)" | \
 				 sed -e 's/2\.9.*/2.9x/' -e 's/3\.[0-9]/3.x/' \
-				 -e 's/4\.[0-9]/4.x/' -e 's/5\.[0-9]/5.x/')
+				 -e 's/4\.[0-9]/4.x/' -e 's/[56]\.[0-9]/5.x/')
 endif
 
 ifneq (, $(findstring Sun, $(CC_LONGVER)))
@@ -732,13 +734,6 @@ ifneq ($(VERSIONTYPE),)
 	DEFS+= -DVERSIONTYPE='"$(VERSIONTYPE)"' -DTHISREVISION='"$(THISREVISION)"'
 endif
 
-ifneq ($(FREERADIUS),)
-	DEFS+= -DUSE_FREERADIUS
-	RADIUS_LIB= -lfreeradius-client
-else
-	RADIUS_LIB= -lradiusclient-ng
-endif
-
 ifneq ($(TLS),)
 	DEFS+= -DUSE_TLS
 endif
@@ -832,9 +827,10 @@ ifeq ($(ARCH), arm)
 	use_fast_lock=yes
 endif
 
-ifeq ($(ARCH), arm6)
-	use_fast_lock=yes
-endif
+# use need some asm code for locking before enabling this
+#ifeq ($(ARCH), arm6)
+#	use_fast_lock=yes
+#endif
 
 ifeq ($(ARCH), ppc)
 	use_fast_lock=yes
@@ -884,6 +880,8 @@ LDFLAGS+=
 
 ifeq ($(CC_NAME)$(CC_CLASS), gcc5.x)
 	CFLAGS+=-std=gnu89
+	# force 4.x class
+	CC_CLASS=4.x
 endif
 
 ifeq (,$(CFLAGS))
@@ -1465,6 +1463,9 @@ ifeq ($(OS), linux)
 	ifneq ($(found_lock_method), yes)
 		DEFS+= -DUSE_POSIX_SEM  # try posix sems
 		found_lock_method=yes
+	endif
+	ifneq (,$(findstring USE_PTHREAD_MUTEX, $(DEFS)))
+		LIBS += -pthread
 	endif
 	# check for >= 2.5.44
 	ifeq ($(shell [ $(OSREL_N) -ge 2005044 ] && echo has_epoll), has_epoll)

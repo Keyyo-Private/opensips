@@ -414,9 +414,11 @@ init_ssl_methods(void)
 	ssl_methods[TLS_USE_SSLv2 - 1] = (SSL_METHOD*)SSLv2_method();
 #endif
 
+#ifndef OPENSSL_NO_SSL3
 	ssl_methods[TLS_USE_SSLv3_cli - 1] = (SSL_METHOD*)SSLv3_client_method();
 	ssl_methods[TLS_USE_SSLv3_srv - 1] = (SSL_METHOD*)SSLv3_server_method();
 	ssl_methods[TLS_USE_SSLv3 - 1] = (SSL_METHOD*)SSLv3_method();
+#endif
 
 	ssl_methods[TLS_USE_TLSv1_cli - 1] = (SSL_METHOD*)TLSv1_client_method();
 	ssl_methods[TLS_USE_TLSv1_srv - 1] = (SSL_METHOD*)TLSv1_server_method();
@@ -755,7 +757,7 @@ init_tls(void)
 	)!=0 ) {
 		LM_ERR("compiled agaist an openssl with %s"
 			"kerberos, but run with one with %skerberos\n",
-			(i==1)?"":"no ",(i!=1)?"no ":"");
+			(i!=1)?"":"no ",(i!=1)?"no ":"");
 		return -1;
 	}
 
@@ -837,7 +839,7 @@ init_tls_domains(struct tls_domain *d)
 		* load ca
 		*/
 		if (!d->ca_file) {
-			LM_NOTICE("no CA for tls[%s:%d] defined, "
+			LM_NOTICE("no CA list for tls[%s:%d] defined, "
 				"using default '%s'\n", ip_addr2a(&d->addr), d->port,
 				tls_ca_file);
 			d->ca_file = tls_ca_file;
@@ -850,7 +852,7 @@ init_tls_domains(struct tls_domain *d)
 		*/
 		if (!d->ca_directory) {
 
-			LM_NOTICE("no CA for tls[%s:%d] defined, "
+			LM_NOTICE("no CA dir for tls[%s:%d] defined, "
 				"using default '%s'\n", ip_addr2a(&d->addr), d->port,
 				 tls_ca_dir);
 			d->ca_directory = tls_ca_dir;

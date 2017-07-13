@@ -59,7 +59,7 @@ int rest_get_method(struct sip_msg *msg, char *url,
 	long http_rc;
 	pv_value_t pv_val;
 	str st = { print_buff, 0 };
-	str body = { 0, 0 };
+	str body = { NULL, 0 }, tbody;
 
 	handle = curl_easy_init();
 	if (!handle) {
@@ -73,9 +73,9 @@ int rest_get_method(struct sip_msg *msg, char *url,
 	w_curl_easy_setopt(handle, CURLOPT_TIMEOUT, curl_timeout);
 
 	w_curl_easy_setopt(handle, CURLOPT_VERBOSE, 1);
-	w_curl_easy_setopt(handle, CURLOPT_FAILONERROR, 1);
 	w_curl_easy_setopt(handle, CURLOPT_ERRORBUFFER, err_buff);
 	w_curl_easy_setopt(handle, CURLOPT_STDERR, stdout);
+	w_curl_easy_setopt(handle, CURLOPT_FAILONERROR, 0);
 
 	w_curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, write_func);
 	w_curl_easy_setopt(handle, CURLOPT_WRITEDATA, &body);
@@ -114,10 +114,11 @@ int rest_get_method(struct sip_msg *msg, char *url,
 		goto error;
 	}
 
-	trim(&body);
+	tbody = body;
+	trim(&tbody);
 
 	pv_val.flags = PV_VAL_STR;
-	pv_val.rs = body;
+	pv_val.rs = tbody;
 
 	if (pv_set_value(msg, body_pv, 0, &pv_val) != 0) {
 		LM_ERR("Set body pv value failed!\n");
@@ -163,7 +164,7 @@ int rest_post_method(struct sip_msg *msg, char *url, char *ctype, char *body,
 	long http_rc;
 	struct curl_slist *list = NULL;
 	str st = { print_buff, 0 };
-	str res_body = { 0, 0 };
+	str res_body = { NULL, 0 }, tbody;
 	pv_value_t pv_val;
 
 	handle = curl_easy_init();
@@ -188,8 +189,8 @@ int rest_post_method(struct sip_msg *msg, char *url, char *ctype, char *body,
 
 	w_curl_easy_setopt(handle, CURLOPT_VERBOSE, 1);
 	w_curl_easy_setopt(handle, CURLOPT_STDERR, stdout);
+	w_curl_easy_setopt(handle, CURLOPT_FAILONERROR, 0);
 	w_curl_easy_setopt(handle, CURLOPT_ERRORBUFFER, err_buff);
-	w_curl_easy_setopt(handle, CURLOPT_FAILONERROR, 1);
 
 	w_curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, write_func);
 	w_curl_easy_setopt(handle, CURLOPT_WRITEDATA, &res_body);
@@ -229,10 +230,11 @@ int rest_post_method(struct sip_msg *msg, char *url, char *ctype, char *body,
 		goto error;
 	}
 
-	trim(&res_body);
+	tbody = res_body;
+	trim(&tbody);
 
 	pv_val.flags = PV_VAL_STR;
-	pv_val.rs = res_body;
+	pv_val.rs = tbody;
 
 	if (pv_set_value(msg, body_pv, 0, &pv_val) != 0) {
 		LM_ERR("Set body pv value failed!\n");

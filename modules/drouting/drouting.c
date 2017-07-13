@@ -989,8 +989,10 @@ static inline int get_group_id(struct sip_uri *uri)
 	}
 
 	if (RES_ROW_N(res) == 0) {
-		if (dr_default_grp!=-1)
+		if (dr_default_grp!=-1) {
+			dr_dbf.free_result(db_hdl, res);
 			return dr_default_grp;
+		}
 		LM_ERR("no group for user "
 			"\"%.*s\"@\"%.*s\"\n", uri->user.len, uri->user.s,
 			uri->host.len, uri->host.s);
@@ -1263,7 +1265,7 @@ static int use_next_gw(struct sip_msg* msg,
 		}
 
 		LM_DBG("new RURI set to <%.*s> via socket <%.*s>\n",
-			val.s.len,val.s.s,
+			ruri.len,ruri.s,
 			sock?sock->name.len:4, sock?sock->name.s:"none");
 
 		/* get value for next gw ID from avp */
@@ -1527,7 +1529,7 @@ static int do_routing(struct sip_msg* msg, dr_group_t *drg, int flags,
 	str ruri;
 	str next_carrier_attrs = {NULL, 0};
 	str next_gw_attrs = {NULL, 0};
-	int ret;
+	int ret, fret;
 	char tmp;
 	char *ruri_buf;
 
@@ -1542,20 +1544,22 @@ static int do_routing(struct sip_msg* msg, dr_group_t *drg, int flags,
 		goto error1;
 	}
 
-	/* do some cleanup first */
-	destroy_avps( 0, ruri_avp, 1);
-	destroy_avps( 0, gw_id_avp, 1);
-	destroy_avps( 0, gw_sock_avp, 1);
-	destroy_avps( 0, rule_attrs_avp, 1);
-	destroy_avps( 0, gw_attrs_avp, 1);
-	destroy_avps( 0, carrier_attrs_avp, 1);
+	/* do some cleanup first (if without the CHECK_ONLY flag) */
+	if ((flags & DR_PARAM_ONLY_CHECK) == 0) {
+		destroy_avps( 0, ruri_avp, 1);
+		destroy_avps( 0, gw_id_avp, 1);
+		destroy_avps( 0, gw_sock_avp, 1);
+		destroy_avps( 0, rule_attrs_avp, 1);
+		destroy_avps( 0, gw_attrs_avp, 1);
+		destroy_avps( 0, carrier_attrs_avp, 1);
 
-	if (gw_priprefix_avp!=-1)
-		destroy_avps( 0, gw_priprefix_avp, 1);
-	if (rule_id_avp!=-1)
-		destroy_avps( 0, rule_id_avp, 1);
-	if (rule_prefix_avp!=-1)
-		destroy_avps( 0, rule_prefix_avp, 1);
+		if (gw_priprefix_avp!=-1)
+			destroy_avps( 0, gw_priprefix_avp, 1);
+		if (rule_id_avp!=-1)
+			destroy_avps( 0, rule_id_avp, 1);
+		if (rule_prefix_avp!=-1)
+			destroy_avps( 0, rule_prefix_avp, 1);
+	}
 
 	if ( !(flags & DR_PARAM_INTERNAL_TRIGGERED) ) {
 		/* not internally triggered, so get data from SIP msg */
@@ -1694,12 +1698,11 @@ search_again:
 	}
 
 	if (rt_info->route_idx>0 && rt_info->route_idx<RT_NO) {
-		ret = run_top_route( rlist[rt_info->route_idx].a, msg );
-		if (ret&ACT_FL_DROP) {
+		fret = run_top_route( rlist[rt_info->route_idx].a, msg );
+		if (fret&ACT_FL_DROP) {
 			/* drop the action */
 			LM_DBG("script route %s drops routing "
-				"by %d\n", rlist[rt_info->route_idx].name, ret);
-			ret = -1;
+				"by %d\n", rlist[rt_info->route_idx].name, fret);
 			goto error2;
 		}
 	}
@@ -1902,70 +1905,80 @@ no_gws:
 	/* we are done reading -> unref the data */
 	lock_stop_read( ref_lock );
 
+	/* prepare/update data for fallback */
 	if ( flags & DR_PARAM_RULE_FALLBACK ) {
 		if ( !(flags & DR_PARAM_INTERNAL_TRIGGERED) ) {
-			/* first time ? we need to save some date, to be able to
-			   do the rule fallback later in "next_gw" */
-			LM_DBG("saving rule_idx %d, prefix %.*s\n",rule_idx,
-				prefix_len - (rule_idx?0:1), username.s);
-			val.n = rule_idx;
-			if (add_avp( 0 , avpID_store_index, val) ) {
-				LM_ERR("failed to insert index avp for fallback\n");
-				flags = flags & ~DR_PARAM_RULE_FALLBACK;
-			}
-			/* if no rules available on current prefix (index is 0), simply
-			   reduce the len of the prefix from start, to lookup another
-			   prefix in the DR tree */
-			val.s.s = username.s ;
-			val.s.len = prefix_len - (rule_idx?0:1);
-			if (add_avp( AVP_VAL_STR, avpID_store_prefix, val) ) {
-				LM_ERR("failed to insert prefix avp for fallback\n");
-				flags = flags & ~DR_PARAM_RULE_FALLBACK;
-			}
-			/* also store current ruri as we will need it */
-			val.s = ruri;
-			if (add_avp( AVP_VAL_STR, avpID_store_ruri, val) ) {
-				LM_ERR("failed to insert ruri avp for fallback\n");
-				flags = flags & ~DR_PARAM_RULE_FALLBACK;
-			}
-			/* we need to save a some date, to be able to do the rule
-			   fallback later in "next_gw" (prefix/index already added) */
-			if (wl_list) {
-				val.s = parsed_whitelist ;
-				val.s.len++; /* we need extra space to place \0 when using */
-				if (add_avp( AVP_VAL_STR, avpID_store_whitelist, val) ) {
-					LM_ERR("failed to insert whitelist avp for fallback\n");
+			/* first time - we need to save some date, to be able to
+			 * do the rule fallback later in "next_gw" , but do it only if 
+			 * there is place for fallback (more rules or shorter prefix are 
+			 * available) */
+			if (prefix_len!=0 || rule_idx!=0) {
+				/* first time ? we need to save some date, to be able to
+				   do the rule fallback later in "next_gw" */
+				LM_DBG("saving rule_idx %d, prefix %.*s\n",rule_idx,
+					prefix_len - (rule_idx?0:1), username.s);
+				val.n = rule_idx;
+				if (add_avp( 0 , avpID_store_index, val) ) {
+					LM_ERR("failed to insert index avp for fallback\n");
 					flags = flags & ~DR_PARAM_RULE_FALLBACK;
 				}
-			}
-			val.n = grp_id ;
-			if (add_avp( 0, avpID_store_group, val) ) {
-				LM_ERR("failed to insert group avp for fallback\n");
-				flags = flags & ~DR_PARAM_RULE_FALLBACK;
-			}
-			val.n = flags ;
-			if (add_avp( 0, avpID_store_flags, val) ) {
-				LM_ERR("failed to insert flags avp for fallback\n");
+				/* if no rules available on current prefix (index is 0), simply
+				   reduce the len of the prefix from start, to lookup another
+				   prefix in the DR tree */
+				val.s.s = username.s ;
+				val.s.len = prefix_len - (rule_idx?0:1);
+				if (add_avp( AVP_VAL_STR, avpID_store_prefix, val) ) {
+					LM_ERR("failed to insert prefix avp for fallback\n");
+					flags = flags & ~DR_PARAM_RULE_FALLBACK;
+				}
+				/* also store current ruri as we will need it */
+				val.s = ruri;
+				if (add_avp( AVP_VAL_STR, avpID_store_ruri, val) ) {
+					LM_ERR("failed to insert ruri avp for fallback\n");
+					flags = flags & ~DR_PARAM_RULE_FALLBACK;
+				}
+				/* we need to save a some date, to be able to do the rule
+				   fallback later in "next_gw" (prefix/index already added) */
+				if (wl_list) {
+					val.s = parsed_whitelist ;
+					val.s.len++;/* we need extra space to place \0 when using*/
+					if (add_avp( AVP_VAL_STR, avpID_store_whitelist, val) ) {
+						LM_ERR("failed to insert whitelist avp for fallback\n");
+						flags = flags & ~DR_PARAM_RULE_FALLBACK;
+					}
+				}
+				val.n = grp_id ;
+				if (add_avp( 0, avpID_store_group, val) ) {
+					LM_ERR("failed to insert group avp for fallback\n");
+					flags = flags & ~DR_PARAM_RULE_FALLBACK;
+				}
+				val.n = flags ;
+				if (add_avp( 0, avpID_store_flags, val) ) {
+					LM_ERR("failed to insert flags avp for fallback\n");
+				}
 			}
 		} else {
 			/* update the fallback coordonats for next resume */
 			/* using ugly hack by directly accessing the AVP data in order
-			   to perform changes - we want to avoid re-creating the AVP -bogdan */
+			 * to perform changes - we want to avoid re-creating the 
+			 * AVP -bogdan */
 			avp_index->data = (void *)(long)rule_idx;
 			if (rule_idx==0) {
 				void *data;
 				/* all rules under current prefix used -> reduce the prefix */
 				data = (void*)&avp_prefix->data;
-				((str*)data)->len = prefix_len-1;
+				((str*)data)->len = prefix_len?prefix_len-1:0;
 			}
 			LM_DBG("updating to %d, prefix %.*s \n",rule_idx,
 				prefix_len-(rule_idx?1:0),username.s);
 		}
 	}
 
+	if (wl_list) pkg_free(wl_list);
 	if (ruri_buf) pkg_free(ruri_buf);
 	return 1;
 error2:
+	if (wl_list) pkg_free(wl_list);
 	/* we are done reading -> unref the data */
 	lock_stop_read( ref_lock );
 error1:
