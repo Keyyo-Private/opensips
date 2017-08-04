@@ -790,8 +790,8 @@ error:
 static void db_update(unsigned int ticks,void *param)
 {
 	ua_pres_t* p= NULL;
-	db_key_t q_cols[19];
-	db_val_t q_vals[19];
+	db_key_t q_cols[20];
+	db_val_t q_vals[20];
 	db_key_t db_cols[5];
 	db_val_t db_vals[5];
 	db_op_t  db_ops[1] ;
