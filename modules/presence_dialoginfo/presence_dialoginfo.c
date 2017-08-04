@@ -54,6 +54,7 @@ pres_contains_presence_t pres_contains_presence;
 
 /* module parameters */
 int force_single_dialog = 0;
+int force_single_dialog_flag = -1;
 
 /* module exported commands */
 static cmd_export_t cmds[] =
@@ -63,7 +64,8 @@ static cmd_export_t cmds[] =
 
 /* module exported paramaters */
 static param_export_t params[] = {
-	{ "force_single_dialog", INT_PARAM, &force_single_dialog },
+	{ "force_single_dialog",      INT_PARAM, &force_single_dialog },
+	{ "force_single_dialog_flag", INT_PARAM, &force_single_dialog_flag },
 	{0, 0, 0}
 };
 
@@ -116,6 +118,13 @@ static int mod_init(void)
 		LM_ERR("failed to add dialog-info events\n");
 		return -1;
 	}
+
+	if (force_single_dialog_flag!= -1 && force_single_dialog_flag > MAX_FLAG) {
+		LM_ERR("invalid force_single_dialog flag %d!!\n", force_single_dialog_flag);
+		return -1;
+	}
+
+        force_single_dialog_flag = (force_single_dialog_flag!=-1)?(1<<force_single_dialog_flag):0;
 
     return 0;
 }

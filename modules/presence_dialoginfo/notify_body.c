@@ -52,6 +52,7 @@ struct xml_info {
 str* agregate_xmls(str* pres_user, str* pres_domain, str** body_array, int n, int partial);
 str* build_dialoginfo(str* pres_user, str* pres_domain);
 extern int force_single_dialog;
+extern int force_single_dialog_flag;
 
 static str* _build_empty_dialoginfo(const char* pres_uri_char, str* extra_hdrs);
 
@@ -409,7 +410,7 @@ str *dlginfo_body_setversion(subs_t *subs, str *body) {
 	memcpy(version_start, version, version_len);
 	memset(version_start + version_len, ' ', MAX_INT_LEN + 2 - version_len);
 
-	if(subs->user_flag) {
+	if(subs->user_flag & force_single_dialog_flag) {
 		return dlginfo_force_single_dialog(body);
 	} else {
 		return NULL;
