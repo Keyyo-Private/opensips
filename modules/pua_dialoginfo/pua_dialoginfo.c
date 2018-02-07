@@ -1081,8 +1081,8 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 				peer_uri.s[len++]='>';
 				memcpy(peer_uri.s + len, CRLF, CRLF_LEN);
 				len+= CRLF_LEN;
-				peer_uri.len = len;
 			}
+			peer_uri.len = len;
 			LM_DBG("Peer uri = %.*s\n", peer_uri.len, peer_uri.s);
 		}
 
