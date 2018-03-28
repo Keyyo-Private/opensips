@@ -29,7 +29,7 @@
 
 send_publish_t pua_send_publish;
 
-void dialog_publish(char *state, struct to_body* entity, struct to_body *peer, str *callid,
+void dialog_publish(char *state, struct to_body* entity, struct to_body* realentity, struct to_body *peer, str *callid,
 	unsigned int initiator, unsigned int lifetime, str *localtag, str *remotetag,
 	int local_rendering, int remote_rendering, str *setup_ts, str *connect_ts, str *release_ts, str *replace);
 

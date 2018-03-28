@@ -375,7 +375,7 @@ error:
 	return NULL;
 }
 
-void dialog_publish(char *state, struct to_body* entity, struct to_body *peer, str *callid,
+void dialog_publish(char *state, struct to_body* entity, struct to_body* realentity, struct to_body *peer, str *callid,
 	unsigned int initiator, unsigned int lifetime, str *localtag, str *remotetag,
 	int local_rendering, int remote_rendering, str *setup_ts, str *connect_ts, str *release_ts,
 	str *replace)
@@ -384,7 +384,7 @@ void dialog_publish(char *state, struct to_body* entity, struct to_body *peer, s
 	publ_info_t publ;
 	int ret_code;
 
-	body= build_dialoginfo(state, entity, peer, callid, initiator, localtag, remotetag, local_rendering, remote_rendering, setup_ts, connect_ts, release_ts, replace);
+	body= build_dialoginfo(state, realentity, peer, callid, initiator, localtag, remotetag, local_rendering, remote_rendering, setup_ts, connect_ts, release_ts, replace);
 	if(body == NULL || body->s == NULL)
 	{
 		LM_ERR("failed to construct dialoginfo body\n");

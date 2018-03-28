@@ -89,6 +89,12 @@ static str peer_b_dlg_var = {"dlg_peer_b", 10};
 static str entity_dlg_var = {"dlg_entity", 10};
 static str entity_a_dlg_var = {"dlg_entity_a", 12};
 static str entity_b_dlg_var = {"dlg_entity_b", 12};
+static str gpeer_dlg_var = {"dlg_gpeer", 9};
+static str gpeer_a_dlg_var = {"dlg_gpeer_a", 11};
+static str gpeer_b_dlg_var = {"dlg_gpeer_b", 11};
+static str gentity_dlg_var = {"dlg_gentity", 11};
+static str gentity_a_dlg_var = {"dlg_gentity_a", 13};
+static str gentity_b_dlg_var = {"dlg_gentity_b", 13};
 static str flag_dlg_var = {"dlginfo_flag", 12};
 static str caller_spec_param= {0, 0};
 static str callee_spec_param= {0, 0};
@@ -102,6 +108,18 @@ static pv_spec_t caller_a_spec;
 static pv_spec_t callee_a_spec;
 static pv_spec_t caller_b_spec;
 static pv_spec_t callee_b_spec;
+static str gcaller_spec_param= {0, 0};
+static str gcallee_spec_param= {0, 0};
+static str gcaller_a_spec_param= {0, 0};
+static str gcallee_a_spec_param= {0, 0};
+static str gcaller_b_spec_param= {0, 0};
+static str gcallee_b_spec_param= {0, 0};
+static pv_spec_t gcaller_spec;
+static pv_spec_t gcallee_spec;
+static pv_spec_t gcaller_a_spec;
+static pv_spec_t gcallee_a_spec;
+static pv_spec_t gcaller_b_spec;
+static pv_spec_t gcallee_b_spec;
 static int osips_ps = 1;
 static int publish_on_trying = 0;
 static int nopublish_flag = -1;
@@ -140,6 +158,12 @@ static param_export_t params[]={
 	{"callee_a_spec_param",   STR_PARAM, &callee_a_spec_param.s },
 	{"caller_b_spec_param",   STR_PARAM, &caller_b_spec_param.s },
 	{"callee_b_spec_param",   STR_PARAM, &callee_b_spec_param.s },
+	{"gcaller_spec_param",   STR_PARAM, &gcaller_spec_param.s },
+	{"gcallee_spec_param",   STR_PARAM, &gcallee_spec_param.s },
+	{"gcaller_a_spec_param",   STR_PARAM, &gcaller_a_spec_param.s },
+	{"gcallee_a_spec_param",   STR_PARAM, &gcallee_a_spec_param.s },
+	{"gcaller_b_spec_param",   STR_PARAM, &gcaller_b_spec_param.s },
+	{"gcallee_b_spec_param",   STR_PARAM, &gcallee_b_spec_param.s },
 	{"osips_ps",            INT_PARAM, &osips_ps },
 	{"nopublish_flag",	        INT_PARAM, &nopublish_flag	},
 	{0, 0, 0 }
@@ -295,11 +319,15 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 {
 	str ttag = {0,0}, ftag = {0,0};
 	struct to_body from, from_a, from_b;
+	struct to_body gfrom, gfrom_a, gfrom_b;
 	str peer_uri= {0, 0}, peer_a_uri= {0, 0}, peer_b_uri= {0, 0};
+	str gpeer_uri= {0, 0}, gpeer_a_uri= {0, 0}, gpeer_b_uri= {0, 0};
 	char flag = DLG_PUB_AB;
 	str flag_str;
 	struct to_body peer_a_to_body, peer_b_to_body;
+	struct to_body gpeer_a_to_body, gpeer_b_to_body;
 	str entity_uri= {0, 0}, entity_a_uri= {0, 0}, entity_b_uri= {0, 0};
+	str gentity_uri= {0, 0}, gentity_a_uri= {0, 0}, gentity_b_uri= {0, 0};
 	int buf_len = 255;
 	struct sip_msg* msg = _params->msg;
 	int local_rendering = -1;
@@ -318,6 +346,9 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 	memset(&from, 0, sizeof(struct to_body));
 	memset(&from_a, 0, sizeof(struct to_body));
 	memset(&from_b, 0, sizeof(struct to_body));
+	memset(&gfrom, 0, sizeof(struct to_body));
+	memset(&gfrom_a, 0, sizeof(struct to_body));
+	memset(&gfrom_b, 0, sizeof(struct to_body));
 
 	/* try to extract the flag */
 	dlg_api.fetch_dlg_value(dlg, &flag_dlg_var, &flag_str, 1);
@@ -327,7 +358,9 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 	{
 		peer_a_uri.len = buf_len;
 		peer_a_uri.s = (char*)pkg_malloc(buf_len);
-		if(peer_a_uri.s == NULL)
+		gpeer_a_uri.len = buf_len;
+		gpeer_a_uri.s = (char*)pkg_malloc(buf_len);
+		if(peer_a_uri.s == NULL || gpeer_a_uri.s == NULL)
 		{
 			LM_ERR("No more memory\n");
 			goto error;
@@ -336,6 +369,10 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 		if(dlg_api.fetch_dlg_value(dlg, &peer_a_dlg_var, &peer_a_uri, 1) <0)
 		{
 			peer_a_uri.len = 0;
+		}
+		if(dlg_api.fetch_dlg_value(dlg, &gpeer_a_dlg_var, &gpeer_a_uri, 1) <0)
+		{
+			gpeer_a_uri.len = 0;
 		}
 
 		if(peer_a_uri.len)
@@ -348,7 +385,9 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 	{
 		peer_b_uri.len = buf_len;
 		peer_b_uri.s = (char*)pkg_malloc(buf_len);
-		if(peer_b_uri.s == NULL)
+		gpeer_b_uri.len = buf_len;
+		gpeer_b_uri.s = (char*)pkg_malloc(buf_len);
+		if(peer_b_uri.s == NULL || gpeer_b_uri.s == NULL)
 		{
 			LM_ERR("No more memory\n");
 			goto error;
@@ -357,6 +396,10 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 		if(dlg_api.fetch_dlg_value(dlg, &peer_b_dlg_var, &peer_b_uri, 1) <0)
 		{
 			peer_b_uri.len = 0;
+		}
+		if(dlg_api.fetch_dlg_value(dlg, &gpeer_b_dlg_var, &gpeer_b_uri, 1) <0)
+		{
+			gpeer_b_uri.len = 0;
 		}
 
 		if(peer_b_uri.len)
@@ -371,7 +414,9 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 	{
 		peer_uri.len = buf_len;
 		peer_uri.s = (char*)pkg_malloc(buf_len);
-		if(peer_uri.s == NULL)
+		gpeer_uri.len = buf_len;
+		gpeer_uri.s = (char*)pkg_malloc(buf_len);
+		if(peer_uri.s == NULL || gpeer_uri.s == NULL)
 		{
 			LM_ERR("No more memory\n");
 			goto error;
@@ -382,6 +427,11 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 			LM_ERR("Failed to fetch peer uri dialog variable\n");
 			goto error;
 		}
+		if(dlg_api.fetch_dlg_value(dlg, &gpeer_dlg_var, &gpeer_uri, 1) < 0)
+		{
+			gpeer_uri.len = 0;
+		}
+
 
 		LM_DBG("peer_uri = %.*s\n", peer_uri.len, peer_uri.s);
 
@@ -396,6 +446,19 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 			memcpy(peer_b_uri.s, peer_uri.s, peer_uri.len);
 			peer_b_uri.len = peer_uri.len;
 		}
+
+		if( (flag == DLG_PUB_AB || flag == DLG_PUB_A) && gpeer_a_uri.len == 0 && gpeer_uri.len != 0)
+		{
+			memcpy(gpeer_a_uri.s, gpeer_uri.s, gpeer_uri.len);
+			gpeer_a_uri.len = gpeer_uri.len;
+		}
+
+		if( (flag == DLG_PUB_AB || flag == DLG_PUB_B) && peer_b_uri.len == 0 && gpeer_uri.len != 0)
+		{
+			memcpy(gpeer_b_uri.s, gpeer_uri.s, gpeer_uri.len);
+			gpeer_b_uri.len = gpeer_uri.len;
+		}
+
 	}
 
 	dlg_api.fetch_dlg_value(dlg, &setup_dlg_var, &setup_ts, 1);
@@ -411,6 +474,18 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 			LM_ERR("Failed to peer A uri [%.*s]\n", peer_a_uri.len, peer_a_uri.s);
 			goto error;
 		}
+		if(gpeer_a_uri.len != 0)
+		{
+			parse_to(gpeer_a_uri.s, gpeer_a_uri.s+gpeer_a_uri.len, &gpeer_a_to_body);
+			if(gpeer_a_to_body.error != PARSE_OK)
+			{
+				LM_ERR("Failed to gpeer A uri [%.*s]\n", gpeer_a_uri.len, gpeer_a_uri.s);
+				goto error;
+			}
+		} else
+		{
+			gpeer_a_to_body.uri.len = 0;
+		}
 	}
 
 	if( flag == DLG_PUB_AB || flag == DLG_PUB_B)
@@ -421,6 +496,19 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 			LM_ERR("Failed to peer B uri [%.*s]\n", peer_b_uri.len, peer_b_uri.s);
 			goto error;
 		}
+		if(gpeer_b_uri.len != 0)
+		{
+			parse_to(gpeer_b_uri.s, gpeer_b_uri.s+gpeer_b_uri.len, &gpeer_b_to_body);
+			if(gpeer_b_to_body.error != PARSE_OK)
+			{
+				LM_ERR("Failed to gpeer B uri [%.*s]\n", gpeer_b_uri.len, gpeer_b_uri.s);
+				goto error;
+			}
+		} else
+		{
+			gpeer_b_to_body.uri.len = 0;
+		}
+
 	}
 
 	/* check if entity A is also custom */
@@ -428,7 +516,9 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 	{
 		entity_a_uri.len = buf_len;
 		entity_a_uri.s = (char*)pkg_malloc(buf_len);
-		if(entity_a_uri.s == NULL)
+		gentity_a_uri.len = buf_len;
+		gentity_a_uri.s = (char*)pkg_malloc(buf_len);
+		if(entity_a_uri.s == NULL || gentity_a_uri.s == NULL )
 		{
 			LM_ERR("No more memory\n");
 			goto error;
@@ -446,6 +536,19 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 			LM_DBG("entity_a_uri = %.*s\n", entity_a_uri.len, entity_a_uri.s);
 			LM_DBG("from a uri = %.*s\n", from_a.uri.len, from_a.uri.s);
 		}
+		if(dlg_api.fetch_dlg_value(dlg, &gentity_a_dlg_var, &gentity_a_uri, 1) == 0)
+		{
+			/* overwrite from with this value */
+			parse_to(gentity_a_uri.s, gentity_a_uri.s + gentity_a_uri.len, &gfrom_a);
+			if(gfrom_a.error != PARSE_OK)
+			{
+				LM_ERR("Wrong format for entity body\n");
+				goto error;
+			}
+			LM_DBG("gentity_a_uri = %.*s\n", gentity_a_uri.len, gentity_a_uri.s);
+			LM_DBG("gfrom a uri = %.*s\n", gfrom_a.uri.len, gfrom_a.uri.s);
+		}
+
 	}
 
 	/* check if entity B is also custom */
@@ -453,7 +556,9 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 	{
 		entity_b_uri.len = buf_len;
 		entity_b_uri.s = (char*)pkg_malloc(buf_len);
-		if(entity_b_uri.s == NULL)
+		gentity_b_uri.len = buf_len;
+		gentity_b_uri.s = (char*)pkg_malloc(buf_len);
+		if(entity_b_uri.s == NULL || gentity_b_uri.s == NULL)
 		{
 			LM_ERR("No more memory\n");
 			goto error;
@@ -471,6 +576,19 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 			LM_DBG("entity_b_uri = %.*s\n", entity_b_uri.len, entity_b_uri.s);
 			LM_DBG("from b uri = %.*s\n", from_b.uri.len, from_b.uri.s);
 		}
+		if(dlg_api.fetch_dlg_value(dlg, &gentity_b_dlg_var, &gentity_b_uri, 1) == 0)
+		{
+			/* overwrite from with this value */
+			parse_to(gentity_b_uri.s, gentity_b_uri.s + gentity_b_uri.len, &gfrom_b);
+			if(gfrom_b.error != PARSE_OK)
+			{
+				LM_ERR("Wrong format for entity body\n");
+				goto error;
+			}
+			LM_DBG("gentity_b_uri = %.*s\n", gentity_b_uri.len, gentity_b_uri.s);
+			LM_DBG("gfrom b uri = %.*s\n", gfrom_b.uri.len, gfrom_b.uri.s);
+		}
+
 	}
 
 	if( ( (flag == DLG_PUB_AB || flag == DLG_PUB_A) && from_a.uri.len == 0 ) ||
@@ -510,6 +628,46 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 		}
 	
 	}
+
+	if( ( (flag == DLG_PUB_AB || flag == DLG_PUB_A) && gfrom_a.uri.len == 0 ) ||
+	    ( (flag == DLG_PUB_AB || flag == DLG_PUB_B) && gfrom_b.uri.len == 0 ))
+	{
+		gfrom.uri.len = 0;
+		gentity_uri.len = buf_len;
+		gentity_uri.s = (char*)pkg_malloc(buf_len);
+		if(gentity_uri.s == NULL)
+		{
+			LM_ERR("No more memory\n");
+			goto error;
+		}
+
+
+		/* check if entity is also custom */
+		if(dlg_api.fetch_dlg_value(dlg, &gentity_dlg_var, &gentity_uri, 1) == 0)
+		{
+			/* overwrite from with this value */
+			parse_to(gentity_uri.s, gentity_uri.s + gentity_uri.len, &gfrom);
+			if(gfrom.error != PARSE_OK)
+			{
+				LM_ERR("Wrong format for entity body\n");
+				goto error;
+			}
+			LM_DBG("gentity_uri = %.*s\n", gentity_uri.len, gentity_uri.s);
+			LM_DBG("gfrom uri = %.*s\n", gfrom.uri.len, gfrom.uri.s);
+		}
+
+		if( (flag == DLG_PUB_AB || flag == DLG_PUB_A) && gfrom_a.uri.len == 0 )
+		{
+			gfrom_a.uri = gfrom.uri;
+		}
+
+		if( (flag == DLG_PUB_AB || flag == DLG_PUB_B) && gfrom_b.uri.len == 0 )
+		{
+			gfrom_b.uri = gfrom.uri;
+		}
+	
+	}
+
 
 	if (include_tags) {
 		/* caller tag */
@@ -560,9 +718,18 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 	case DLGCB_EXPIRED:
 		LM_DBG("dialog over, from=%.*s\n", dlg->from_uri.len, dlg->from_uri.s);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
-			dialog_publish("terminated", &from_a, &peer_a_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+		{
+			dialog_publish("terminated", &from_a, &from_a, &peer_a_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+			if(gfrom_a.uri.len != 0)
+				dialog_publish("terminated", &gfrom_a, &gfrom_a, &peer_a_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+		}
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
-			dialog_publish("terminated", &peer_b_to_body, &from_b, &(dlg->callid), 0, 0, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+		{
+			dialog_publish("terminated", &peer_b_to_body, &peer_b_to_body, &from_b, &(dlg->callid), 0, 0, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+			if(gpeer_b_to_body.uri.len != 0)
+				dialog_publish("terminated", &gpeer_b_to_body, &gpeer_b_to_body, &from_b, &(dlg->callid), 0, 0, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+		}
+ 
 		break;
 	case DLGCB_RESPONSE_WITHIN:
 		if (get_cseq(msg)->method_id==METHOD_INVITE) {
@@ -591,9 +758,17 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 
 		LM_DBG("dialog confirmed, from=%.*s\n", dlg->from_uri.len, dlg->from_uri.s);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
-			dialog_publish("confirmed", &from_a, &peer_a_to_body, &(dlg->callid), 1, dlg->lifetime, from_tag, to_tag, local_rendering, remote_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
+		{
+			dialog_publish("confirmed", &from_a, &from_a, &peer_a_to_body, &(dlg->callid), 1, dlg->state == DLG_STATE_CONFIRMED_NA ? 30 : dlg->lifetime, from_tag, to_tag, local_rendering, remote_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
+			if(gfrom_a.uri.len != 0)
+				dialog_publish("confirmed", &gfrom_a, &gfrom_a, &peer_a_to_body, &(dlg->callid), 1, dlg->state == DLG_STATE_CONFIRMED_NA ? 30 : dlg->lifetime, from_tag, to_tag, local_rendering, remote_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
+		}
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
-			dialog_publish("confirmed", &peer_b_to_body, &from_b, &(dlg->callid), 0, dlg->lifetime, to_tag, from_tag, remote_rendering, local_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
+		{
+			dialog_publish("confirmed", &peer_b_to_body, &peer_b_to_body, &from_b, &(dlg->callid), 0, dlg->state == DLG_STATE_CONFIRMED_NA ? 30 : dlg->lifetime, to_tag, from_tag, remote_rendering, local_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
+			if(gpeer_b_to_body.uri.len != 0)
+				dialog_publish("confirmed", &gpeer_b_to_body, &gpeer_b_to_body, &from_b, &(dlg->callid), 0, dlg->state == DLG_STATE_CONFIRMED_NA ? 30 : dlg->lifetime, to_tag, from_tag, remote_rendering, local_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
+		}
 		break;
 	case DLGCB_EARLY:
 		LM_DBG("dialog is early, from_a=%.*s\n", from_a.uri.len, from_a.uri.s);
@@ -601,26 +776,40 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
 		{
 			if (caller_confirmed) {
-				dialog_publish("confirmed", &from_a, &peer_a_to_body, &(dlg->callid), 1,
+				dialog_publish("confirmed", &from_a, &from_a, &peer_a_to_body, &(dlg->callid), 1,
 					early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
 			} else {
-				dialog_publish("early", &from_a, &peer_a_to_body, &(dlg->callid), 1,
+				dialog_publish("early", &from_a, &from_a, &peer_a_to_body, &(dlg->callid), 1,
 					early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
 			}
+			if(gfrom_a.uri.len != 0)
+				dialog_publish("early", &gfrom_a, &gfrom_a, &peer_a_to_body, &(dlg->callid), 1,
+					early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
 		}
 
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
 		{
-			dialog_publish("early", &peer_b_to_body, &from_b, &(dlg->callid), 0,
+			dialog_publish("early", &peer_b_to_body, &peer_b_to_body, &from_b, &(dlg->callid), 0,
 				early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+			if(gpeer_b_to_body.uri.len != 0)
+				dialog_publish("early", &gpeer_b_to_body, &gpeer_b_to_body, &from_b, &(dlg->callid), 0,
+					early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
 		}
 		break;
 	default:
 		LM_ERR("unhandled dialog callback type %d received, from=%.*s\n", type, dlg->from_uri.len, dlg->from_uri.s);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
-			dialog_publish("terminated", &from_a, &peer_a_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, local_rendering, remote_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
+		{
+			dialog_publish("terminated", &from_a, &from_a, &peer_a_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+			if(gfrom_a.uri.len != 0)
+				dialog_publish("terminated", &gfrom_a, &gfrom_a, &peer_a_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+		}
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
-			dialog_publish("terminated", &peer_b_to_body, &from_b, &(dlg->callid), 0, 0, to_tag, from_tag, remote_rendering, local_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
+		{
+			dialog_publish("terminated", &peer_b_to_body, &peer_b_to_body, &from_b, &(dlg->callid), 0, 0, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+			if(gpeer_b_to_body.uri.len != 0)
+				dialog_publish("terminated", &gpeer_b_to_body, &gpeer_b_to_body, &from_b, &(dlg->callid), 0, 0, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+		}
 	}
 error:
 	if(peer_uri.s)
@@ -641,7 +830,25 @@ error:
 		free_to_params(&from_a);
 	if (from_b.param_lst)
 		free_to_params(&from_b);
-
+	if (gfrom.param_lst)
+		free_to_params(&gfrom);
+	if (gfrom_a.param_lst)
+		free_to_params(&gfrom_a);
+	if (gfrom_b.param_lst)
+		free_to_params(&gfrom_b);
+	if(gpeer_uri.s)
+		pkg_free(gpeer_uri.s);
+	if(gpeer_a_uri.s)
+		pkg_free(gpeer_a_uri.s);
+	if(gpeer_b_uri.s)
+		pkg_free(gpeer_b_uri.s);
+	if(gentity_uri.s)
+		pkg_free(gentity_uri.s);
+	if(gentity_a_uri.s)
+		pkg_free(gentity_a_uri.s);
+	if(gentity_b_uri.s)
+		pkg_free(gentity_b_uri.s);
+ 
 }
 
 
@@ -831,6 +1038,37 @@ static int mod_init(void)
 		return ret;
 	}
 
+	if( ( ret = mod_init_spec_param(&gcaller_spec_param, &gcaller_spec, "gcaller")) )
+	{
+		return ret;
+	}
+
+	if( (ret = mod_init_spec_param(&gcallee_spec_param, &gcallee_spec, "gcallee")) )
+	{
+		return ret;
+	}
+
+	if( (ret = mod_init_spec_param(&gcaller_a_spec_param, &gcaller_a_spec, "gcaller_a")) )
+	{
+		return ret;
+	}
+
+	if( (ret = mod_init_spec_param(&gcallee_a_spec_param, &gcallee_a_spec, "gcallee_a")) )
+	{
+		return ret;
+	}
+
+	if( (ret = mod_init_spec_param(&gcaller_b_spec_param, &gcaller_b_spec, "gcaller_b")) )
+	{
+		return ret;
+	}
+
+	if( (ret = mod_init_spec_param(&gcallee_b_spec_param, &gcallee_b_spec, "gcallee_b")) )
+	{
+		return ret;
+	}
+
+
 	return 0;
 }
 
@@ -944,16 +1182,24 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 	str peer_uri= {0, 0}; /* constructed from TO display name and RURI */
 	str peer_a_uri= {0, 0}; /* constructed from TO display name and RURI */
 	str peer_b_uri= {0, 0}; /* constructed from TO display name and RURI */
+	str gpeer_uri= {0, 0}; /* constructed from TO display name and RURI */
+	str gpeer_a_uri= {0, 0}; /* constructed from TO display name and RURI */
+	str gpeer_b_uri= {0, 0}; /* constructed from TO display name and RURI */
 	struct to_body* from_a, * from_b, peer_a_to_body, peer_b_to_body, *to;
+	struct to_body* gfrom_a, * gfrom_b, gpeer_a_to_body, gpeer_b_to_body;
 	str* ruri;
 	int len =0;
 	char flag= DLG_PUB_AB;
 	static char buf[256];
 	int buf_len= 255;
+	int fbuf_len= 255;
 	str flag_str;
 	char callee_buf[256];
 	char callee_a_buf[256];
 	char callee_b_buf[256];
+	char gcallee_buf[256];
+	char gcallee_a_buf[256];
+	char gcallee_b_buf[256];
 	str tag, *from_tag;
 	str setup_ts = {0,0};
 	str connect_ts = {0,0};
@@ -979,20 +1225,20 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 	/* store flag, if defined  */
 	if(flag_pv)
 	{
-		if(pv_printf(msg, (pv_elem_t*)flag_pv, buf, &buf_len)<0)
+		if(pv_printf(msg, (pv_elem_t*)flag_pv, buf, &fbuf_len)<0)
 		{
 			LM_ERR("cannot print the format\n");
 			return -1;
 		}
 
-		if(!check_flag(buf, buf_len))
+		if(!check_flag(buf, fbuf_len))
 		{
 			LM_ERR("Wrong value for flag\n");
 			return -1;
 		}
 		flag = buf[0];
 		flag_str.s = buf;
-		flag_str.len = buf_len;
+		flag_str.len = fbuf_len;
 		if(dlg_api.store_dlg_value(dlg, &flag_dlg_var, &flag_str)< 0)
 		{
 			LM_ERR("Failed to store dialog ruri\n");
@@ -1001,20 +1247,42 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 	}
 
 	from_a = from_b = get_from(msg);
+	gfrom_a = gfrom_b = NULL;
 	/* if defined overwrite */
 	if(caller_spec_param.s) /* if parameter defined */
 	{
 		if(get_caller_from_spec(msg, dlg, &caller_spec, from_a, &entity_dlg_var))
 		{
+			LM_ERR("Failed to get_caller_from_spec caller_spec\n");
 			return -1;
 		}
 		from_b = from_a;
+	}
+
+	if(gcaller_spec_param.s) /* if parameter defined */
+	{
+		if(get_caller_from_spec(msg, dlg, &gcaller_spec, gfrom_a, &gentity_dlg_var))
+		{
+			LM_ERR("Failed to get_caller_from_spec gcaller_spec\n");
+			return -1;
+		}
+		gfrom_b = gfrom_a;
 	}
 
 	if( (flag == DLG_PUB_A || flag == DLG_PUB_AB) && caller_a_spec_param.s) /* if we publish to A and parameter defined */
 	{
 		if(get_caller_from_spec(msg, dlg, &caller_a_spec, from_a, &entity_a_dlg_var))
 		{
+			LM_ERR("Failed to get_caller_from_spec caller_a_spec\n");
+			return -1;
+		}
+	}
+
+	if( (flag == DLG_PUB_A || flag == DLG_PUB_AB) && gcaller_a_spec_param.s) /* if we publish to A and parameter defined */
+	{
+		if(get_caller_from_spec(msg, dlg, &gcaller_a_spec, gfrom_a, &gentity_a_dlg_var))
+		{
+			LM_ERR("Failed to get_caller_from_spec gcaller_a_spec\n");
 			return -1;
 		}
 	}
@@ -1023,15 +1291,37 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 	{
 		if(get_caller_from_spec(msg, dlg, &caller_b_spec, from_b, &entity_b_dlg_var))
 		{
+			LM_ERR("Failed to get_caller_from_spec caller_b_spec\n");
 			return -1;
 		}
 	}
+
+	if( (flag == DLG_PUB_B || flag == DLG_PUB_AB) && gcaller_b_spec_param.s) /* if we publish to B and parameter defined */
+	{
+		if(get_caller_from_spec(msg, dlg, &gcaller_b_spec, gfrom_b, &gentity_b_dlg_var))
+		{
+			LM_ERR("Failed to get_caller_from_spec gcaller_b_spec\n");
+			return -1;
+		}
+	}
+
 
 	if((flag == DLG_PUB_A || flag == DLG_PUB_AB) && callee_a_spec_param.s)
 	{
 		peer_a_uri.s = callee_a_buf;
 		if(get_callee_from_spec(msg, dlg, &callee_a_spec, &peer_a_uri))
 		{
+			LM_ERR("Failed to get_callee_from_spec callee_a_spec\n");
+			return -1;
+		}
+	}
+
+	if((flag == DLG_PUB_A || flag == DLG_PUB_AB) && gcallee_a_spec_param.s)
+	{
+		gpeer_a_uri.s = gcallee_a_buf;
+		if(get_callee_from_spec(msg, dlg, &gcallee_a_spec, &gpeer_a_uri))
+		{
+			LM_ERR("Failed to get_callee_from_spec gcallee_a_spec\n");
 			return -1;
 		}
 	}
@@ -1041,6 +1331,17 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 		peer_b_uri.s = callee_b_buf;
 		if(get_callee_from_spec(msg, dlg, &callee_b_spec, &peer_b_uri))
 		{
+			LM_ERR("Failed to get_callee_from_spec callee_b_spec\n");
+			return -1;
+		}
+	}
+
+	if((flag == DLG_PUB_B || flag == DLG_PUB_AB) && gcallee_b_spec_param.s)
+	{
+		gpeer_b_uri.s = gcallee_b_buf;
+		if(get_callee_from_spec(msg, dlg, &gcallee_b_spec, &gpeer_b_uri))
+		{
+			LM_ERR("Failed to get_callee_from_spec gcallee_b_spec\n");
 			return -1;
 		}
 	}
@@ -1052,6 +1353,7 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 		{
 			if(get_callee_from_spec(msg, dlg, &callee_spec, &peer_uri))
 			{
+				LM_ERR("Failed to get_callee_from_spec callee_spec\n");
 				return -1;
 			}
 		}
@@ -1059,11 +1361,12 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 		if(peer_uri.len == 0)
 		{
 			ruri = GET_RURI(msg);
+			LM_ERR("ruri = %.*s\n", ruri->len, ruri->s);
 			to = get_to(msg);
 			len= to->display.len + 2 + ruri->len + CRLF_LEN;
 			if(len > buf_len)
 			{
-				LM_ERR("Buffer overflow\n");
+				LM_ERR("Buffer overflow %d > %d\n", len, buf_len);
 				return -1;
 			}
 			len = 0;
@@ -1094,6 +1397,26 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 		}
 	}
 
+	if( (gpeer_a_uri.len == 0 && (flag == DLG_PUB_A || flag == DLG_PUB_AB)) || (gpeer_b_uri.len == 0 && (flag == DLG_PUB_B || flag == DLG_PUB_AB)) )
+	{
+		gpeer_uri.s = gcallee_buf;
+		if(gcallee_spec_param.s)
+		{
+			if(get_callee_from_spec(msg, dlg, &gcallee_spec, &gpeer_uri))
+			{
+				return -1;
+			}
+		}
+
+		/* store peer uri in dialog structure */
+		if(dlg_api.store_dlg_value(dlg, &gpeer_dlg_var, &gpeer_uri)< 0)
+		{
+			LM_ERR("Failed to store dialog ruri\n");
+			return -1;
+		}
+	}
+
+
 	if((flag == DLG_PUB_A || flag == DLG_PUB_AB))
 	{
 		if(peer_a_uri.len == 0)
@@ -1114,6 +1437,34 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 		{
 			LM_ERR("Failed to peer A uri [%.*s] / [%.*s]\n", peer_a_uri.len, peer_a_uri.s, peer_uri.len, peer_uri.s);
 			return -1;
+		}
+	}
+
+	if((flag == DLG_PUB_A || flag == DLG_PUB_AB))
+	{
+		if(gpeer_a_uri.len == 0)
+		{
+			gpeer_a_uri.s = gpeer_uri.s;
+			gpeer_a_uri.len = gpeer_uri.len;
+
+		} else
+		{
+			/* store peer uri in dialog structure */
+			if(dlg_api.store_dlg_value(dlg, &gpeer_a_dlg_var, &gpeer_a_uri)< 0)
+			{
+				LM_ERR("Failed to store dialog ruri\n");
+				return -1;
+			}
+		}
+
+		if(gpeer_a_uri.len != 0)
+		{
+			parse_to(gpeer_a_uri.s, gpeer_a_uri.s+gpeer_a_uri.len, &gpeer_a_to_body);
+			if(gpeer_a_to_body.error != PARSE_OK)
+			{
+				LM_ERR("Failed to gpeer A uri [%.*s] / [%.*s]\n", gpeer_a_uri.len, gpeer_a_uri.s, gpeer_uri.len, gpeer_uri.s);
+				return -1;
+			}
 		}
 	}
 
@@ -1141,6 +1492,35 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 			return -1;
 		}
 	}
+
+	if((flag == DLG_PUB_B || flag == DLG_PUB_AB))
+	{
+		if(gpeer_b_uri.len == 0)
+		{
+			gpeer_b_uri.s = gpeer_uri.s;
+			gpeer_b_uri.len = gpeer_uri.len;
+
+		} else
+		{
+			/* store peer uri in dialog structure */
+			if(dlg_api.store_dlg_value(dlg, &gpeer_b_dlg_var, &gpeer_b_uri)< 0)
+			{
+				LM_ERR("Failed to store dialog ruri\n");
+				return -1;
+			}
+		}
+
+		if(gpeer_b_uri.len != 0)
+		{
+			parse_to(gpeer_b_uri.s, gpeer_b_uri.s+gpeer_b_uri.len, &gpeer_b_to_body);
+			if(gpeer_b_to_body.error != PARSE_OK)
+			{
+				LM_ERR("Failed to gpeer B uri [%.*s] / [%.*s]\n", gpeer_b_uri.len, gpeer_b_uri.s, gpeer_uri.len, gpeer_uri.s);
+				return -1;
+			}
+		}
+	}
+
 
 	/* register dialog callbacks which triggers sending PUBLISH */
 	if (dlg_api.register_dlgcb(dlg,
@@ -1182,10 +1562,18 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 
         if(publish_on_trying) {
 	        if(flag == DLG_PUB_A || flag == DLG_PUB_AB)
-		        dialog_publish("trying", from_a, &peer_a_to_body, &(dlg->callid), 1, DEFAULT_CREATED_LIFETIME, from_tag, 0, is_rendering(msg), -1, &setup_ts, &connect_ts, &release_ts, &replace);
+		{
+			dialog_publish("trying", from_a, from_a, &peer_a_to_body, &(dlg->callid), 1, DEFAULT_CREATED_LIFETIME, from_tag, 0, is_rendering(msg), -1, &setup_ts, &connect_ts, &release_ts, &replace);
+			if(gfrom_a)
+				dialog_publish("trying", gfrom_a, gfrom_a, &peer_a_to_body, &(dlg->callid), 1, DEFAULT_CREATED_LIFETIME, from_tag, 0, is_rendering(msg), -1, &setup_ts, &connect_ts, &release_ts, &replace);
+		}
 
 	        if(flag == DLG_PUB_B || flag == DLG_PUB_AB)
-		        dialog_publish("trying", &peer_b_to_body, from_b, &(dlg->callid), 0, DEFAULT_CREATED_LIFETIME, 0, from_tag, -1, is_rendering(msg), &setup_ts, &connect_ts, &release_ts, &replace);
+		{
+			dialog_publish("trying", &peer_b_to_body, &peer_b_to_body, from_b, &(dlg->callid), 0, DEFAULT_CREATED_LIFETIME, 0, from_tag, -1, is_rendering(msg), &setup_ts, &connect_ts, &release_ts, &replace);
+			if(gpeer_b_uri.len != 0)
+				dialog_publish("trying", &gpeer_b_to_body, &gpeer_b_to_body, from_b, &(dlg->callid), 0, DEFAULT_CREATED_LIFETIME, 0, from_tag, -1, is_rendering(msg), &setup_ts, &connect_ts, &release_ts, &replace);
+		}
         }
 
 	return 1;
