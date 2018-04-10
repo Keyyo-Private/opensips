@@ -1394,6 +1394,9 @@ void dialog_update_db(unsigned int ticks, void * param)
 
 			} else if (cell->state == DLG_STATE_DELETED &&
 					   !(cell->flags & DLG_FLAG_DB_DELETED)) {
+				/* dialog will be saved */
+				run_dlg_callbacks( DLGCB_SAVED, cell, 0, DLG_DIR_NONE, 0);
+
 				/* save pointer to next dialog
 				 * delete might swipe cell from under our feet */
 				next_cell=cell->next;
