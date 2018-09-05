@@ -759,15 +759,15 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 		LM_DBG("dialog confirmed, from=%.*s\n", dlg->from_uri.len, dlg->from_uri.s);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
 		{
-			dialog_publish("confirmed", &from_a, &from_a, &peer_a_to_body, &(dlg->callid), 1, dlg->state == DLG_STATE_CONFIRMED_NA ? 30 : dlg->lifetime, from_tag, to_tag, local_rendering, remote_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
+			dialog_publish("confirmed", &from_a, &from_a, &peer_a_to_body, &(dlg->callid), 1, dlg->lifetime, from_tag, to_tag, local_rendering, remote_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
 			if(gfrom_a.uri.len != 0)
-				dialog_publish("confirmed", &gfrom_a, &gfrom_a, &peer_a_to_body, &(dlg->callid), 1, dlg->state == DLG_STATE_CONFIRMED_NA ? 30 : dlg->lifetime, from_tag, to_tag, local_rendering, remote_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
+				dialog_publish("confirmed", &gfrom_a, &gfrom_a, &peer_a_to_body, &(dlg->callid), 1, dlg->lifetime, from_tag, to_tag, local_rendering, remote_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
 		}
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
 		{
-			dialog_publish("confirmed", &peer_b_to_body, &peer_b_to_body, &from_b, &(dlg->callid), 0, dlg->state == DLG_STATE_CONFIRMED_NA ? 30 : dlg->lifetime, to_tag, from_tag, remote_rendering, local_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
+			dialog_publish("confirmed", &peer_b_to_body, &peer_b_to_body, &from_b, &(dlg->callid), 0, dlg->lifetime, to_tag, from_tag, remote_rendering, local_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
 			if(gpeer_b_to_body.uri.len != 0)
-				dialog_publish("confirmed", &gpeer_b_to_body, &gpeer_b_to_body, &from_b, &(dlg->callid), 0, dlg->state == DLG_STATE_CONFIRMED_NA ? 30 : dlg->lifetime, to_tag, from_tag, remote_rendering, local_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
+				dialog_publish("confirmed", &gpeer_b_to_body, &gpeer_b_to_body, &from_b, &(dlg->callid), 0, dlg->lifetime, to_tag, from_tag, remote_rendering, local_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
 		}
 		break;
 	case DLGCB_EARLY:
