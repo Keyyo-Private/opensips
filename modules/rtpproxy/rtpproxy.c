@@ -285,7 +285,7 @@ static int child_init(int);
 static void mod_destroy(void);
 static int mi_child_init(void);
 
-static int engage_force_rtpproxy(struct dlg_cell *dlg, struct sip_msg *msg);
+static int engage_force_rtpproxy(struct dlg_cell *dlg, int type, struct sip_msg *msg);
 
 /*mi commands*/
 static struct mi_root* mi_enable_rtp_proxy(struct mi_root* cmd_tree,
@@ -2655,7 +2655,7 @@ static void engage_callback(struct dlg_cell *dlg, int type,
 		return;
 
 	/* engage */
-	engage_force_rtpproxy(dlg, _params->msg);
+	engage_force_rtpproxy(dlg, type, _params->msg);
 }
 
 static void engage_close_callback(struct dlg_cell *dlg, int type,
@@ -2804,7 +2804,7 @@ error:
 }
 
 
-static int engage_force_rtpproxy(struct dlg_cell *dlg, struct sip_msg *msg)
+static int engage_force_rtpproxy(struct dlg_cell *dlg, int type, struct sip_msg *msg)
 {
 	int offer = 1;
 	int setid;
@@ -2841,12 +2841,27 @@ static int engage_force_rtpproxy(struct dlg_cell *dlg, struct sip_msg *msg)
 		goto error;
 	}
 
-	/* check to see if this is a late negociation */
-	if (dlg_api.fetch_dlg_value(dlg, &late_name, &value, 0) < 0)
-		offer = 0;
 	has_sdp = msg_has_sdp(msg);
-
 	method_id = get_cseq(msg)->method_id;
+
+	if (type == DLGCB_REQ_WITHIN && method_id == METHOD_INVITE) {
+		if(!has_sdp) {
+			/* late negociation without SDP */
+			if (dlg_api.store_dlg_value(dlg, &late_name, &late_name) < 0) {
+				LM_ERR("cannot store late_negociation param into dialog\n");
+				return -1;
+			}
+			goto done;
+		} else {
+			/* In case previous one was late negociation */
+			dlg_api.store_dlg_value(dlg, &late_name, NULL);
+		}
+	} else {
+		/* check to see if this is a late negociation */
+		if (dlg_api.fetch_dlg_value(dlg, &late_name, &value, 0) < 0)
+			offer = 0;
+	}
+
 	LM_DBG("method id is %d SDP: %d\n", method_id, has_sdp);
 	if (method_id == METHOD_ACK) {
 		/* normal negociation - ACK cannot have SDP */
@@ -2945,7 +2960,7 @@ void engage_tm_reply_callback(struct cell* t, int type, struct tmcb_params *p)
 		return;
 
 	/* engage */
-	engage_force_rtpproxy(NULL, p->rpl);
+	engage_force_rtpproxy(NULL, 0, p->rpl);
 }
 
 
