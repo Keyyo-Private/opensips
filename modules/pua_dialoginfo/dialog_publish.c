@@ -59,7 +59,7 @@ void print_publ(publ_info_t* p)
 
 str* build_dialoginfo(char *state, struct to_body *entity, struct to_body *peer,
 		str *callid, unsigned int initiator, str *localtag, str *remotetag,
-		int local_rendering, int remote_rendering, str *setup_ts, str *connect_ts, str *release_ts, str *replace)
+		int local_rendering, int remote_rendering, str *setup_ts, str *connect_ts, str *release_ts, str *replace, str *icid, pua_avp_info *extra_info)
 {
 	xmlDocPtr  doc = NULL;
 	xmlNodePtr root_node = NULL;
@@ -72,6 +72,7 @@ str* build_dialoginfo(char *state, struct to_body *entity, struct to_body *peer,
 	xmlNodePtr rendering_node = NULL;
 	xmlNodePtr time_node = NULL;
 	xmlNodePtr replace_node = NULL;
+	xmlNodePtr extra_node = NULL;
 	str *body= NULL;
 	char buf[MAX_URI_SIZE+1];
 
@@ -188,6 +189,43 @@ str* build_dialoginfo(char *state, struct to_body *entity, struct to_body *peer,
 		LM_ERR("while adding child\n");
 		goto error;
 	}
+
+	/* extra-info tag */
+	extra_node = xmlNewChild(dialog_node, NULL, BAD_CAST "extra-info", NULL);
+	if (extra_node == NULL)
+	{
+		LM_ERR("while adding child\n");
+		goto error;
+	}
+
+	xmlNewProp(extra_node, BAD_CAST "xmlns",
+		BAD_CAST "urn:oid:1.3.6.1.4.1.8546:params:xml:ns:dialog-info");
+
+	if (icid->s && icid->len < MAX_URI_SIZE) {
+		sprintf(buf, "%.*s", icid->len, icid->s );
+		xmlNewProp(extra_node, BAD_CAST "icid", BAD_CAST buf);
+	}
+	else if (icid->s) {
+		LM_ERR("icid '%.*s' too long, maximum=%d\n", icid->len, icid->s, MAX_URI_SIZE);
+	}
+
+	int i = 0;
+	char *key_ptr = NULL;
+	char *sep_ptr = NULL;
+	for (; i < extra_info->nb_avp; ++i) {
+		str *val = &extra_info->strings[i];
+		sprintf(buf, "%.*s", val->len, val->s );
+		key_ptr = buf;
+		sep_ptr = strchr(buf, ':');
+		if (sep_ptr != NULL) {
+			*sep_ptr = '\0';
+			/* key_ptr points to the beginning of buf (until sep, replaced by \0)
+				sep_ptr+1 points to buf after the separator (until \0) */
+			xmlNewProp(extra_node, BAD_CAST key_ptr, BAD_CAST sep_ptr+1);
+		}
+	}
+ 	/* extra-info tag end */
+
 
 	if (include_localremote) {
 		/* remote tag*/
@@ -378,13 +416,13 @@ error:
 void dialog_publish(char *state, struct to_body* entity, struct to_body* realentity, struct to_body *peer, str *callid,
 	unsigned int initiator, unsigned int lifetime, str *localtag, str *remotetag,
 	int local_rendering, int remote_rendering, str *setup_ts, str *connect_ts, str *release_ts,
-	str *replace)
+	str *replace, str *icid, pua_avp_info *extra_info)
 {
 	str* body= NULL;
 	publ_info_t publ;
 	int ret_code;
 
-	body= build_dialoginfo(state, realentity, peer, callid, initiator, localtag, remotetag, local_rendering, remote_rendering, setup_ts, connect_ts, release_ts, replace);
+	body= build_dialoginfo(state, realentity, peer, callid, initiator, localtag, remotetag, local_rendering, remote_rendering, setup_ts, connect_ts, release_ts, replace, icid, extra_info);
 	if(body == NULL || body->s == NULL)
 	{
 		LM_ERR("failed to construct dialoginfo body\n");

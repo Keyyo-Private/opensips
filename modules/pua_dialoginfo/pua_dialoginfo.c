@@ -49,6 +49,7 @@
 #include "../dialog/dlg_hash.h"
 #include "../pua/pua_bind.h"
 #include "pua_dialoginfo.h"
+#include "pua_avp.h"
 #include "../../parser/parse_content.h"
 #include "../../parser/sdp/sdp_helpr_funcs.h"
 
@@ -114,6 +115,7 @@ static str gcaller_a_spec_param= {0, 0};
 static str gcallee_a_spec_param= {0, 0};
 static str gcaller_b_spec_param= {0, 0};
 static str gcallee_b_spec_param= {0, 0};
+static str extra_info_spec_param= {0, 0};
 static pv_spec_t gcaller_spec;
 static pv_spec_t gcallee_spec;
 static pv_spec_t gcaller_a_spec;
@@ -129,6 +131,7 @@ static str setup_dlg_var = {"dlg_setup_time", 14};
 static str connect_dlg_var = {"dlg_connect_time", 16};
 static str release_dlg_var = {"dlg_release_time", 16};
 static str replace_dlg_var = {"dlg_replace", 11};
+static str icid_dlg_var = {"dlg_icid", 8};
 
 /** module functions */
 
@@ -164,6 +167,7 @@ static param_export_t params[]={
 	{"gcallee_a_spec_param",   STR_PARAM, &gcallee_a_spec_param.s },
 	{"gcaller_b_spec_param",   STR_PARAM, &gcaller_b_spec_param.s },
 	{"gcallee_b_spec_param",   STR_PARAM, &gcallee_b_spec_param.s },
+	{"extra_info_spec_param",  STR_PARAM, &extra_info_spec_param.s },
 	{"osips_ps",            INT_PARAM, &osips_ps },
 	{"nopublish_flag",	        INT_PARAM, &nopublish_flag	},
 	{0, 0, 0 }
@@ -338,10 +342,12 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 	str connect_ts = {0,0};
 	str release_ts = {0,0};
 	str replace = {0,0};
-
+	str icid = {0,0};
 
 	flag_str.s = &flag;
 	flag_str.len = 1;
+
+	pua_avp_info *extra_info = (pua_avp_info*)*_params->param;
 
 	memset(&from, 0, sizeof(struct to_body));
 	memset(&from_a, 0, sizeof(struct to_body));
@@ -465,6 +471,7 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 	dlg_api.fetch_dlg_value(dlg, &connect_dlg_var, &connect_ts, 1);
 	dlg_api.fetch_dlg_value(dlg, &release_dlg_var, &release_ts, 1);
 	dlg_api.fetch_dlg_value(dlg, &replace_dlg_var, &replace, 1);
+	dlg_api.fetch_dlg_value(dlg, &icid_dlg_var, &icid, 1);
 
 	if( flag == DLG_PUB_AB || flag == DLG_PUB_A)
 	{
@@ -719,15 +726,15 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 		LM_DBG("dialog over, from=%.*s\n", dlg->from_uri.len, dlg->from_uri.s);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
 		{
-			dialog_publish("terminated", &from_a, &from_a, &peer_a_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+			dialog_publish("terminated", &from_a, &from_a, &peer_a_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 			if(gfrom_a.uri.len != 0)
-				dialog_publish("terminated", &gfrom_a, &gfrom_a, &peer_a_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+				dialog_publish("terminated", &gfrom_a, &gfrom_a, &peer_a_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 		}
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
 		{
-			dialog_publish("terminated", &peer_b_to_body, &peer_b_to_body, &from_b, &(dlg->callid), 0, 0, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+			dialog_publish("terminated", &peer_b_to_body, &peer_b_to_body, &from_b, &(dlg->callid), 0, 0, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 			if(gpeer_b_to_body.uri.len != 0)
-				dialog_publish("terminated", &gpeer_b_to_body, &gpeer_b_to_body, &from_b, &(dlg->callid), 0, 0, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+				dialog_publish("terminated", &gpeer_b_to_body, &gpeer_b_to_body, &from_b, &(dlg->callid), 0, 0, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 		}
  
 		break;
@@ -759,15 +766,15 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 		LM_DBG("dialog confirmed, from=%.*s\n", dlg->from_uri.len, dlg->from_uri.s);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
 		{
-			dialog_publish("confirmed", &from_a, &from_a, &peer_a_to_body, &(dlg->callid), 1, dlg->lifetime, from_tag, to_tag, local_rendering, remote_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
+			dialog_publish("confirmed", &from_a, &from_a, &peer_a_to_body, &(dlg->callid), 1, dlg->lifetime, from_tag, to_tag, local_rendering, remote_rendering, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 			if(gfrom_a.uri.len != 0)
-				dialog_publish("confirmed", &gfrom_a, &gfrom_a, &peer_a_to_body, &(dlg->callid), 1, dlg->lifetime, from_tag, to_tag, local_rendering, remote_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
+				dialog_publish("confirmed", &gfrom_a, &gfrom_a, &peer_a_to_body, &(dlg->callid), 1, dlg->lifetime, from_tag, to_tag, local_rendering, remote_rendering, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 		}
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
 		{
-			dialog_publish("confirmed", &peer_b_to_body, &peer_b_to_body, &from_b, &(dlg->callid), 0, dlg->lifetime, to_tag, from_tag, remote_rendering, local_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
+			dialog_publish("confirmed", &peer_b_to_body, &peer_b_to_body, &from_b, &(dlg->callid), 0, dlg->lifetime, to_tag, from_tag, remote_rendering, local_rendering, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 			if(gpeer_b_to_body.uri.len != 0)
-				dialog_publish("confirmed", &gpeer_b_to_body, &gpeer_b_to_body, &from_b, &(dlg->callid), 0, dlg->lifetime, to_tag, from_tag, remote_rendering, local_rendering, &setup_ts, &connect_ts, &release_ts, &replace);
+				dialog_publish("confirmed", &gpeer_b_to_body, &gpeer_b_to_body, &from_b, &(dlg->callid), 0, dlg->lifetime, to_tag, from_tag, remote_rendering, local_rendering, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 		}
 		break;
 	case DLGCB_EARLY:
@@ -777,38 +784,38 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 		{
 			if (caller_confirmed) {
 				dialog_publish("confirmed", &from_a, &from_a, &peer_a_to_body, &(dlg->callid), 1,
-					early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+					early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 			} else {
 				dialog_publish("early", &from_a, &from_a, &peer_a_to_body, &(dlg->callid), 1,
-					early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+					early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 			}
 			if(gfrom_a.uri.len != 0)
 				dialog_publish("early", &gfrom_a, &gfrom_a, &peer_a_to_body, &(dlg->callid), 1,
-					early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+					early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 		}
 
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
 		{
 			dialog_publish("early", &peer_b_to_body, &peer_b_to_body, &from_b, &(dlg->callid), 0,
-				early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+				early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 			if(gpeer_b_to_body.uri.len != 0)
 				dialog_publish("early", &gpeer_b_to_body, &gpeer_b_to_body, &from_b, &(dlg->callid), 0,
-					early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+					early_timeout > 0 && early_timeout < dlg->lifetime ? early_timeout : dlg->lifetime, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 		}
 		break;
 	default:
 		LM_ERR("unhandled dialog callback type %d received, from=%.*s\n", type, dlg->from_uri.len, dlg->from_uri.s);
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_A)
 		{
-			dialog_publish("terminated", &from_a, &from_a, &peer_a_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+			dialog_publish("terminated", &from_a, &from_a, &peer_a_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 			if(gfrom_a.uri.len != 0)
-				dialog_publish("terminated", &gfrom_a, &gfrom_a, &peer_a_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+				dialog_publish("terminated", &gfrom_a, &gfrom_a, &peer_a_to_body, &(dlg->callid), 1, 0, from_tag, to_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 		}
 		if(flag == DLG_PUB_AB || flag == DLG_PUB_B)
 		{
-			dialog_publish("terminated", &peer_b_to_body, &peer_b_to_body, &from_b, &(dlg->callid), 0, 0, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+			dialog_publish("terminated", &peer_b_to_body, &peer_b_to_body, &from_b, &(dlg->callid), 0, 0, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 			if(gpeer_b_to_body.uri.len != 0)
-				dialog_publish("terminated", &gpeer_b_to_body, &gpeer_b_to_body, &from_b, &(dlg->callid), 0, 0, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace);
+				dialog_publish("terminated", &gpeer_b_to_body, &gpeer_b_to_body, &from_b, &(dlg->callid), 0, 0, to_tag, from_tag, -1, -1, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 		}
 	}
 error:
@@ -1068,6 +1075,10 @@ static int mod_init(void)
 		return ret;
 	}
 
+	if( (ret = mod_init_avp_param(&extra_info_spec_param, "extra_info")) )
+	{
+		return ret;
+	}
 
 	return 0;
 }
@@ -1083,6 +1094,11 @@ static int check_flag(char* flag, int len)
 error:
 	LM_ERR("Wrong format for dialoginfo_set() parameter. Accepted values: A, B or D\n");
 	return 0;
+}
+
+static void free_extra_info( void *p )
+{
+	pua_avp_free(p);
 }
 
 int get_caller_from_spec(struct sip_msg* msg, struct dlg_cell * dlg, pv_spec_t *spec, struct to_body *from, str *dlg_var)
@@ -1205,6 +1221,7 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 	str connect_ts = {0,0};
 	str release_ts = {0,0};
 	str replace = {0,0};
+	str icid = {0,0};
 
 	if (msg->REQ_METHOD != METHOD_INVITE)
 		return 1;
@@ -1345,6 +1362,15 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 			return -1;
 		}
 	}
+
+	pua_avp_info *extra_info = pua_create_pua_avp_info();
+	if ( !extra_info )
+	{
+		LM_ERR("Failed to create pua_avp struct\n");
+		return -1;
+	}
+	pua_get_avp_info(extra_info);
+	dlg_api.fetch_dlg_value(dlg, &icid_dlg_var, &icid, 1);
 
 	if( (peer_a_uri.len == 0 && (flag == DLG_PUB_A || flag == DLG_PUB_AB)) || (peer_b_uri.len == 0 && (flag == DLG_PUB_B || flag == DLG_PUB_AB)) )
 	{
@@ -1526,7 +1552,7 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
 	if (dlg_api.register_dlgcb(dlg,
 		DLGCB_FAILED| DLGCB_CONFIRMED | DLGCB_TERMINATED | DLGCB_EXPIRED |
 		DLGCB_RESPONSE_WITHIN | DLGCB_EARLY,
-		__dialog_sendpublish, 0, 0) != 0) {
+		__dialog_sendpublish, extra_info, free_extra_info) != 0) {
 		LM_ERR("cannot register callback for interesting dialog types\n");
 		return -1;
 	}
@@ -1563,16 +1589,16 @@ int dialoginfo_set(struct sip_msg* msg, char* flag_pv, char* str2)
         if(publish_on_trying) {
 	        if(flag == DLG_PUB_A || flag == DLG_PUB_AB)
 		{
-			dialog_publish("trying", from_a, from_a, &peer_a_to_body, &(dlg->callid), 1, DEFAULT_CREATED_LIFETIME, from_tag, 0, is_rendering(msg), -1, &setup_ts, &connect_ts, &release_ts, &replace);
+			dialog_publish("trying", from_a, from_a, &peer_a_to_body, &(dlg->callid), 1, DEFAULT_CREATED_LIFETIME, from_tag, 0, is_rendering(msg), -1, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 			if(gfrom_a)
-				dialog_publish("trying", gfrom_a, gfrom_a, &peer_a_to_body, &(dlg->callid), 1, DEFAULT_CREATED_LIFETIME, from_tag, 0, is_rendering(msg), -1, &setup_ts, &connect_ts, &release_ts, &replace);
+				dialog_publish("trying", gfrom_a, gfrom_a, &peer_a_to_body, &(dlg->callid), 1, DEFAULT_CREATED_LIFETIME, from_tag, 0, is_rendering(msg), -1, &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 		}
 
 	        if(flag == DLG_PUB_B || flag == DLG_PUB_AB)
 		{
-			dialog_publish("trying", &peer_b_to_body, &peer_b_to_body, from_b, &(dlg->callid), 0, DEFAULT_CREATED_LIFETIME, 0, from_tag, -1, is_rendering(msg), &setup_ts, &connect_ts, &release_ts, &replace);
+			dialog_publish("trying", &peer_b_to_body, &peer_b_to_body, from_b, &(dlg->callid), 0, DEFAULT_CREATED_LIFETIME, 0, from_tag, -1, is_rendering(msg), &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 			if(gpeer_b_uri.len != 0)
-				dialog_publish("trying", &gpeer_b_to_body, &gpeer_b_to_body, from_b, &(dlg->callid), 0, DEFAULT_CREATED_LIFETIME, 0, from_tag, -1, is_rendering(msg), &setup_ts, &connect_ts, &release_ts, &replace);
+				dialog_publish("trying", &gpeer_b_to_body, &gpeer_b_to_body, from_b, &(dlg->callid), 0, DEFAULT_CREATED_LIFETIME, 0, from_tag, -1, is_rendering(msg), &setup_ts, &connect_ts, &release_ts, &replace, &icid, extra_info);
 		}
         }
 
