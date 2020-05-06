@@ -41,6 +41,7 @@ static int dlg_acc_flag = -1;
 static str setup_dlg_var = {"dlg_setup_time", 14};
 static str connect_dlg_var = {"dlg_connect_time", 16};
 static str release_dlg_var = {"dlg_release_time", 16};
+static str icid_dlg_var = {"dlg_icid", 8};
 
 static param_export_t mod_params[]={
 	{ "radius_config",   STR_PARAM, &radius_config       },
@@ -288,6 +289,9 @@ dlg_acc_info *init_from_sip(struct dlg_cell *dlg, struct dlg_cb_params *_params)
 
 	// Read ICID or generate it
 	dlg_acc_get_icid( request, infos );
+
+	// Send ICID
+	dlg_api.store_dlg_value(dlg, &icid_dlg_var, &infos->strings[DLG_ACC_STR_ICID]);
 
 	// Diversion
 	if ( request->diversion )
