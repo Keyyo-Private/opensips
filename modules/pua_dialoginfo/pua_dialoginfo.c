@@ -347,6 +347,7 @@ __dialog_sendpublish(struct dlg_cell *dlg, int type, struct dlg_cb_params *_para
 	flag_str.s = &flag;
 	flag_str.len = 1;
 
+	// Can be NULL if called from __dialog_loaded
 	pua_avp_info *extra_info = (pua_avp_info*)*_params->param;
 
 	memset(&from, 0, sizeof(struct to_body));
