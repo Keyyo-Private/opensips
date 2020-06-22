@@ -201,27 +201,32 @@ str* build_dialoginfo(char *state, struct to_body *entity, struct to_body *peer,
 	xmlNewProp(extra_node, BAD_CAST "xmlns",
 		BAD_CAST "urn:oid:1.3.6.1.4.1.8546:params:xml:ns:dialog-info");
 
-	if (icid->s && icid->len < MAX_URI_SIZE) {
+	if (icid && icid->s && icid->len < MAX_URI_SIZE) {
 		sprintf(buf, "%.*s", icid->len, icid->s );
 		xmlNewProp(extra_node, BAD_CAST "icid", BAD_CAST buf);
 	}
-	else if (icid->s) {
+	else if (icid && icid->s) {
 		LM_ERR("icid '%.*s' too long, maximum=%d\n", icid->len, icid->s, MAX_URI_SIZE);
 	}
+	else {
+		LM_ERR("icid null\n");
+	}
 
-	int i = 0;
-	char *key_ptr = NULL;
-	char *sep_ptr = NULL;
-	for (; i < extra_info->nb_avp; ++i) {
-		str *val = &extra_info->strings[i];
-		sprintf(buf, "%.*s", val->len, val->s );
-		key_ptr = buf;
-		sep_ptr = strchr(buf, ':');
-		if (sep_ptr != NULL) {
-			*sep_ptr = '\0';
-			/* key_ptr points to the beginning of buf (until sep, replaced by \0)
-				sep_ptr+1 points to buf after the separator (until \0) */
-			xmlNewProp(extra_node, BAD_CAST key_ptr, BAD_CAST sep_ptr+1);
+	if (extra_info) {
+		int i = 0;
+		char *key_ptr = NULL;
+		char *sep_ptr = NULL;
+		for (; i < extra_info->nb_avp; ++i) {
+			str *val = &extra_info->strings[i];
+			sprintf(buf, "%.*s", val->len, val->s );
+			key_ptr = buf;
+			sep_ptr = strchr(buf, ':');
+			if (sep_ptr != NULL) {
+				*sep_ptr = '\0';
+				/* key_ptr points to the beginning of buf (until sep, replaced by \0)
+					sep_ptr+1 points to buf after the separator (until \0) */
+				xmlNewProp(extra_node, BAD_CAST key_ptr, BAD_CAST sep_ptr+1);
+			}
 		}
 	}
  	/* extra-info tag end */
