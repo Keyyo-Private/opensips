@@ -252,10 +252,12 @@ int dlg_th_onreply(struct dlg_cell *dlg, struct sip_msg *rpl, struct sip_msg *re
 		return -1;
 	}
 
-	/* replace contact */
-	if(dlg_replace_contact(rpl, dlg) < 0) {
-		LM_ERR("Failed to replace contact\n");
-		return -1;
+	/* replace contact but not if a redirect reply for initial INVITE*/
+	if ( !(init_req && dir == DLG_DIR_UPSTREAM && rpl->REPLY_STATUS>=300 && rpl->REPLY_STATUS<400) ) {
+		if(dlg_replace_contact(rpl, dlg) < 0) {
+			LM_ERR("Failed to replace contact\n");
+			return -1;
+		}
 	}
 
 	if(dir == DLG_DIR_UPSTREAM)
