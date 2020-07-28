@@ -435,6 +435,19 @@ void fm_free(struct fm_block* qm, void* p)
 	}
 	f=(struct fm_frag*) ((char*)p-sizeof(struct fm_frag));
 
+#ifndef F_MALLOC_OPTIMIZATIONS
+	if (f->prev) {
+	#ifdef DBG_F_MALLOC
+		LM_CRIT("freeing already freed pointer (%p), first free: "
+				"%s: %s(%ld) - aborting\n", p, f->file, f->func, f->line);
+		abort();
+	#else
+		LM_CRIT("freeing already freed pointer (%p) - skipping!\n", p);
+		return;
+	#endif
+	}
+#endif
+
 	#ifdef DBG_F_MALLOC
 	LM_DBG("freeing block alloc'ed from %s: %s(%ld)\n", f->file, f->func,
 			f->line);
